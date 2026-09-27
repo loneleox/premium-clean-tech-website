@@ -1,7 +1,106 @@
-import { Fragment, useEffect, useState } from "react"
+import { createContext, Fragment, useContext, useEffect, useRef, useState } from "react"
+import { Link } from "react-router"
 import { DustField } from "./components/DustField"
 import { PanelState, SolarPanel } from "./components/SolarPanel"
 import { useReveal, useSectionProgress } from "./lib/scroll"
+import { ThemeToggle } from "./lib/theme"
+
+/* ------------------------------------------------------------------ */
+/* Shared solar-system state — Smart Control & Smart Monitoring both   */
+/* read from this single source of truth so they stay in sync.         */
+/* ------------------------------------------------------------------ */
+
+interface SystemCtx {
+  panels: PanelState[]
+  selected: number | null
+  setSelected: (n: number) => void
+  busy: boolean
+  phase: "idle" | "cleaning" | "done"
+  auto: boolean
+  setAuto: (b: boolean) => void
+  cleanPanel: (idx: number) => void
+  dustyCount: number
+}
+
+const SystemContext = createContext<SystemCtx | null>(null)
+
+function useSystem() {
+  const ctx = useContext(SystemContext)
+  if (!ctx) throw new Error("useSystem must be used within SystemProvider")
+  return ctx
+}
+
+function SystemProvider({ children }: { children: React.ReactNode }) {
+  const [panels, setPanels] = useState<PanelState[]>(["clean", "clean", "clean", "clean"])
+  const [selected, setSelected] = useState<number | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [phase, setPhase] = useState<"idle" | "cleaning" | "done">("idle")
+  const [auto, setAuto] = useState(true)
+
+  // Synchronous locks so double-invoked effects / rapid clicks never spawn
+  // or clean twice.
+  const panelsRef = useRef(panels)
+  panelsRef.current = panels
+  const cycleRef = useRef(false) // a dusty/cleaning cycle is currently active
+  const busyRef = useRef(false)
+
+  // Mark one random clean panel as dusty (only if nothing is pending).
+  const spawnDust = () => {
+    if (cycleRef.current) return
+    const p = panelsRef.current
+    const candidates = p.map((s, i) => (s === "clean" ? i : -1)).filter((i) => i >= 0)
+    if (candidates.length === 0) return
+    cycleRef.current = true
+    const pick = candidates[Math.floor(Math.random() * candidates.length)]
+    setPanels((prev) => prev.map((s, i) => (i === pick ? "dust" : s)))
+    setSelected(pick)
+  }
+
+  const cleanPanel = (idx: number) => {
+    if (busyRef.current || idx == null || panelsRef.current[idx] !== "dust") return
+    busyRef.current = true
+    setBusy(true)
+    setPhase("cleaning")
+    setPanels((prev) => prev.map((s, i) => (i === idx ? "cleaning" : s)))
+    setTimeout(() => {
+      setPanels((prev) => prev.map((s, i) => (i === idx ? "clean" : s)))
+      setPhase("done")
+      setBusy(false)
+      busyRef.current = false
+      cycleRef.current = false
+      setTimeout(() => setPhase("idle"), 1800)
+      // 10-second gap, then dust appears on another random panel → cycle.
+      setTimeout(spawnDust, 10000)
+    }, 2600)
+  }
+
+  // Kick off the first detection shortly after mount.
+  useEffect(() => {
+    const t = setTimeout(spawnDust, 1200)
+    return () => clearTimeout(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Automatic mode: whenever a panel is dusty and we're idle, clean it.
+  useEffect(() => {
+    if (!auto || busy) return
+    const dusty = panels.findIndex((s) => s === "dust")
+    if (dusty < 0) return
+    const t = setTimeout(() => cleanPanel(dusty), 1800)
+    return () => clearTimeout(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [auto, busy, panels])
+
+  const dustyCount = panels.filter((s) => s === "dust").length
+
+  return (
+    <SystemContext.Provider
+      value={{ panels, selected, setSelected, busy, phase, auto, setAuto, cleanPanel, dustyCount }}
+    >
+      {children}
+    </SystemContext.Provider>
+  )
+}
 
 /* ------------------------------------------------------------------ */
 /* Primitives                                                          */
@@ -35,10 +134,21 @@ function Kicker({ n, label, dark = false }: { n: string; label: string; dark?: b
         dark ? "text-white/50" : "text-ink/45"
       }`}
     >
-      <span style={{ color: "var(--color-solar-deep)" }}>{n}</span>
       <span className="h-px w-8" style={{ background: "currentColor" }} />
       <span>{label}</span>
     </div>
+  )
+}
+
+/** Gradient blend strip so adjacent sections flow into each other with no
+    hard color break. */
+function Seam({ from, to, h = 110 }: { from: string; to: string; h?: number }) {
+  return (
+    <div
+      aria-hidden
+      className="w-full"
+      style={{ height: h, background: `linear-gradient(180deg, ${from}, ${to})` }}
+    />
   )
 }
 
@@ -60,8 +170,12 @@ function Nav() {
         scrolled ? "backdrop-blur-xl" : ""
       }`}
       style={{
-        background: scrolled ? "rgba(251,251,249,0.72)" : "transparent",
-        borderBottom: scrolled ? "1px solid rgba(10,14,20,0.08)" : "1px solid transparent",
+        background: scrolled
+          ? "color-mix(in oklab, var(--color-paper) 72%, transparent)"
+          : "transparent",
+        borderBottom: scrolled
+          ? "1px solid color-mix(in oklab, var(--color-ink) 10%, transparent)"
+          : "1px solid transparent",
       }}
     >
       <div className="mx-auto flex max-w-[1240px] items-center justify-between px-6 py-4">
@@ -80,13 +194,16 @@ function Nav() {
           <a href="#app" className="transition-colors hover:text-ink">APP</a>
           <a href="#future" className="transition-colors hover:text-ink">FUTURE</a>
         </nav>
-        <a
-          href="#final"
-          className="rounded-full px-4 py-2 font-mono text-[11px] tracking-[0.12em] text-white transition-transform hover:scale-[1.03]"
-          style={{ background: "var(--color-ink)" }}
-        >
-          PROTOTYPE
-        </a>
+        <div className="flex items-center gap-3">
+          <ThemeToggle />
+          <Link
+            to="/contact"
+            className="rounded-full px-4 py-2 font-mono text-[11px] tracking-[0.12em] text-white transition-transform hover:scale-[1.03]"
+            style={{ background: "var(--color-night)" }}
+          >
+            CONTACT
+          </Link>
+        </div>
       </div>
     </header>
   )
@@ -113,7 +230,7 @@ function Hero() {
           className="absolute inset-0"
           style={{
             background:
-              "linear-gradient(180deg, #fff7e6 0%, #fdeecf 22%, #fbfbf9 60%)",
+              "linear-gradient(180deg, color-mix(in oklab, var(--color-solar) 22%, var(--color-paper)) 0%, color-mix(in oklab, var(--color-solar) 8%, var(--color-paper)) 24%, var(--color-paper) 62%)",
           }}
         />
         {/* sun */}
@@ -129,17 +246,19 @@ function Hero() {
                 boxShadow: "0 0 120px 40px rgba(255,176,32,0.45)",
               }}
             />
-            {/* light beams */}
-            {Array.from({ length: 7 }).map((_, i) => (
+            {/* light beams radiating around the sun */}
+            {Array.from({ length: 16 }).map((_, i) => (
               <div
                 key={i}
-                className="absolute left-1/2 top-1/2 origin-top"
+                className="sun-ray absolute left-1/2 top-1/2 origin-top"
                 style={{
-                  width: 2,
-                  height: 480,
-                  transform: `translate(-50%, 40px) rotate(${(i - 3) * 9}deg)`,
+                  width: i % 2 === 0 ? 4 : 2.5,
+                  height: 320,
+                  transform: `translate(-50%, 0) rotate(${i * (360 / 16)}deg)`,
                   background:
-                    "linear-gradient(180deg, rgba(255,190,61,0.5), transparent)",
+                    "linear-gradient(180deg, rgba(255,206,92,0.95) 0%, rgba(255,176,32,0.55) 40%, transparent 100%)",
+                  filter: "blur(0.5px) drop-shadow(0 0 6px rgba(255,190,61,0.65))",
+                  ["--ray-delay" as string]: `${i * 0.25}s`,
                 }}
               />
             ))}
@@ -149,15 +268,18 @@ function Hero() {
         {/* headline */}
         <div
           className="relative z-10 mx-auto max-w-[900px] px-6 text-center"
-          style={{ opacity: Math.max(0, 1 - progress * 1.8) }}
+          style={{ opacity: Math.max(0, 1 - Math.max(0, progress - 0.32) * 3.4) }}
         >
-          <p className="mb-6 font-mono text-[11px] tracking-[0.3em] text-ink/50">
+          <p className="mb-6 font-mono text-[11px] tracking-[0.3em]" style={{ color: "var(--color-ink)", opacity: 0.75 }}>
             SMART SOLAR PANEL CLEANING SYSTEM
           </p>
-          <h1 className="font-display text-[clamp(2.2rem,6vw,4.6rem)] font-600 leading-[1.02] tracking-[-0.02em]">
+          <h1
+            className="font-display text-[clamp(2.2rem,6vw,4.6rem)] font-700 leading-[1.02] tracking-[-0.02em]"
+            style={{ color: "var(--color-ink)" }}
+          >
             What if your solar panels could tell you when they need cleaning?
           </h1>
-          <p className="mx-auto mt-6 max-w-[520px] text-[17px] leading-relaxed text-ink/60">
+          <p className="mx-auto mt-6 max-w-[520px] text-[17px] leading-relaxed" style={{ color: "var(--color-ink)", opacity: 0.85 }}>
             Detect the dust. Clean when needed. Control every panel.
           </p>
         </div>
@@ -172,7 +294,7 @@ function Hero() {
           <SolarPanel dust={dust} />
           {dust > 0.35 && (
             <div
-              className="absolute -right-4 top-2 flex items-center gap-2 rounded-full border border-white/60 bg-white/80 px-3 py-1.5 font-mono text-[10px] tracking-[0.15em] shadow-lg backdrop-blur"
+              className="absolute -right-4 top-2 flex items-center gap-2 rounded-full border border-ink/10 bg-card/80 px-3 py-1.5 font-mono text-[10px] tracking-[0.15em] shadow-lg backdrop-blur"
               style={{ color: "var(--color-solar-deep)" }}
             >
               <span className="live-dot h-1.5 w-1.5 rounded-full" style={{ background: "var(--color-solar)" }} />
@@ -186,7 +308,7 @@ function Hero() {
         {/* scroll cue */}
         <div
           className="absolute bottom-8 left-1/2 -translate-x-1/2 font-mono text-[10px] tracking-[0.25em] text-ink/40"
-          style={{ opacity: Math.max(0, 1 - progress * 3) }}
+          style={{ opacity: Math.max(0, 1 - Math.max(0, progress - 0.32) * 6) }}
         >
           SCROLL ↓
         </div>
@@ -223,7 +345,7 @@ function Problem() {
         <DustField intensity={0.3 + dust} count={60} />
         <div
           className="absolute inset-0"
-          style={{ background: "linear-gradient(90deg, rgba(251,251,249,0.94), rgba(251,251,249,0.4) 55%, transparent)" }}
+          style={{ background: "linear-gradient(90deg, color-mix(in oklab, var(--color-paper) 94%, transparent), color-mix(in oklab, var(--color-paper) 40%, transparent) 55%, transparent)" }}
         />
 
         <div className="relative z-10 mx-auto w-full max-w-[1240px] px-6">
@@ -263,9 +385,8 @@ function Question() {
     { t: "Why can't the system detect it?", at: 0.42 },
     { t: "And clean it?", at: 0.64 },
   ]
-  const scanX = -110 + Math.min(1, Math.max(0, (progress - 0.7) / 0.28)) * 220
   return (
-    <section ref={ref} className="relative h-[260vh]" style={{ background: "var(--color-ink)" }}>
+    <section ref={ref} className="relative h-[260vh]" style={{ background: "var(--color-night)" }}>
       <div className="sticky top-0 flex h-screen items-center justify-center overflow-hidden">
         {/* faint grid */}
         <div className="grain-lines absolute inset-0 text-white/60" />
@@ -286,29 +407,6 @@ function Question() {
             </p>
           ))}
         </div>
-
-        {/* sensor scan entering solution */}
-        {progress > 0.68 && (
-          <>
-            <div
-              className="absolute inset-y-0 w-[2px]"
-              style={{
-                left: `${50 + scanX / 2.4}%`,
-                background: "linear-gradient(180deg, transparent, var(--color-sensor), transparent)",
-                boxShadow: "0 0 24px 4px rgba(34,211,238,0.6)",
-              }}
-            />
-            <div
-              className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2"
-              style={{ left: `${50 + scanX / 2.4}%` }}
-            >
-              <span className="relative flex h-4 w-4">
-                <span className="pulse-ring absolute inline-flex h-full w-full rounded-full" style={{ background: "var(--color-sensor)" }} />
-                <span className="relative inline-flex h-4 w-4 rounded-full" style={{ background: "var(--color-sensor)", boxShadow: "0 0 20px var(--color-sensor)" }} />
-              </span>
-            </div>
-          </>
-        )}
       </div>
     </section>
   )
@@ -328,7 +426,7 @@ function Reveal4() {
     <section id="solution" className="relative overflow-hidden bg-paper py-32">
       <div
         className="absolute inset-x-0 top-0 h-40"
-        style={{ background: "linear-gradient(180deg, var(--color-ink), transparent)" }}
+        style={{ background: "linear-gradient(180deg, var(--color-night), transparent)" }}
       />
       <div className="mx-auto max-w-[1240px] px-6">
         <Reveal>
@@ -346,9 +444,9 @@ function Reveal4() {
         </Reveal>
 
         <Reveal delay={200} className="mt-20">
-          <div className="relative grid items-center gap-6 md:grid-cols-[1.1fr_auto_0.9fr_auto_0.9fr]">
+          <div className="relative grid items-center gap-6 md:grid-cols-[1.1fr_auto_0.9fr_auto_0.9fr_auto_0.9fr]">
             {/* hero panel */}
-            <div className="rounded-2xl border border-ink/10 bg-white/70 p-6 shadow-xl backdrop-blur">
+            <div className="rounded-2xl border border-ink/10 bg-card/70 p-6 shadow-xl backdrop-blur">
               <SolarPanel dust={0} scan />
               <p className="mt-4 font-mono text-[11px] tracking-[0.15em] text-ink/50">LIVE INSTALLATION · ARRAY A</p>
             </div>
@@ -358,11 +456,11 @@ function Reveal4() {
             {chain.map((c, i) => (
               <Fragment key={c.label}>
                 <div
-                  className="rounded-2xl border border-ink/10 bg-white p-6 text-center shadow-sm"
+                  className="rounded-2xl border border-ink/10 bg-card p-6 text-center shadow-sm"
                 >
                   <span
                     className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-full"
-                    style={{ background: `color-mix(in oklab, ${c.color} 18%, white)` }}
+                    style={{ background: `color-mix(in oklab, ${c.color} 18%, var(--color-card))` }}
                   >
                     <span className="h-3 w-3 rounded-full" style={{ background: c.color }} />
                   </span>
@@ -410,7 +508,7 @@ function HowItWorks() {
       body: "A camera captures each panel and computer vision analyzes the surface for accumulated dust.",
       render: () => (
         <div className="relative">
-          <SolarPanel dust={0.35} scan />
+          <SolarPanel dust={0.75} state="dust" />
         </div>
       ),
     },
@@ -419,12 +517,12 @@ function HowItWorks() {
       title: "DECIDE",
       body: "The controller compares the live reading against the defined threshold.",
       render: () => (
-        <div className="rounded-2xl border border-ink/10 bg-white p-8 shadow-lg">
+        <div className="rounded-2xl border border-ink/10 bg-card p-8 shadow-lg">
           <Meter label="Dust Level" value={78} color="var(--color-solar)" />
           <Meter label="Threshold" value={60} color="var(--color-ink)" muted />
           <div
             className="mt-6 flex items-center gap-2 rounded-lg px-4 py-3 font-mono text-[12px] tracking-[0.12em]"
-            style={{ background: "color-mix(in oklab, var(--color-solar) 14%, white)", color: "var(--color-solar-deep)" }}
+            style={{ background: "color-mix(in oklab, var(--color-solar) 14%, var(--color-card))", color: "var(--color-solar-deep)" }}
           >
             <span className="live-dot h-2 w-2 rounded-full" style={{ background: "var(--color-solar)" }} />
             CLEANING REQUIRED
@@ -494,7 +592,7 @@ function Meter({ label, value, color, muted = false }: { label: string; value: n
         <span className="text-ink/60">{label}</span>
         <span style={{ color: muted ? "var(--color-ink)" : color }}>{value}%</span>
       </div>
-      <div className="h-2 overflow-hidden rounded-full" style={{ background: "rgba(10,14,20,0.08)" }}>
+      <div className="h-2 overflow-hidden rounded-full" style={{ background: "color-mix(in oklab, var(--color-ink) 10%, transparent)" }}>
         <div
           className="h-full rounded-full transition-[width] duration-[1400ms] ease-out"
           style={{ width: shown ? `${value}%` : "0%", background: color }}
@@ -526,8 +624,8 @@ function CleaningPanel() {
 
 function MiniPhone() {
   return (
-    <div className="mx-auto w-[220px] rounded-[28px] border-4 border-ink bg-ink p-2 shadow-2xl">
-      <div className="rounded-[20px] bg-paper p-4">
+    <div className="mx-auto w-[220px] rounded-[28px] border-4 border-night bg-night p-2 shadow-2xl">
+      <div className="rounded-[20px] bg-card p-4">
         <p className="font-mono text-[10px] tracking-[0.2em] text-ink/40">SOLARA · LIVE</p>
         <p className="mt-2 font-display text-[15px] font-600">System Status</p>
         {[
@@ -571,25 +669,70 @@ function StatusRow({ label, state }: { label: string; state: PanelState }) {
 
 function WaterTransition() {
   const { ref, progress } = useSectionProgress<HTMLDivElement>()
-  const clean = Math.min(1, progress * 1.4)
+  // Map the wipe across the window where the panel is pinned in view.
+  const clean = Math.min(1, Math.max(0, (progress - 0.34) / 0.32))
+  const passing = clean > 0.02 && clean < 0.98
   return (
-    <section ref={ref} className="relative h-[140vh]">
-      <div className="sticky top-0 flex h-screen items-center justify-center overflow-hidden" style={{ background: "#0b2033" }}>
-        <div className="w-[760px] max-w-[92vw]">
-          <SolarPanel dust={1 - clean} />
+    <section ref={ref} className="relative h-[200vh]">
+      <div className="sticky top-0 flex h-screen flex-col items-center justify-center overflow-hidden" style={{ background: "#0b2033" }}>
+        <div className="relative w-[560px] max-w-[88vw]">
+          {/* dusty panel; dust is wiped away to the left of the ray */}
+          <SolarPanel dust={0.85} wipe={clean} />
+
+          {/* cleaned area: subtle wet sheen trailing behind the ray */}
+          <div
+            className="pointer-events-none absolute inset-y-0 left-0 rounded-[10px]"
+            style={{
+              width: `${clean * 100}%`,
+              background:
+                "linear-gradient(90deg, rgba(150,215,255,0.06) 0%, rgba(180,225,255,0.16) 100%)",
+              mixBlendMode: "screen",
+            }}
+          />
+
+          {/* the cleaning ray / water jet edge */}
+          {passing && (
+            <div
+              className="pointer-events-none absolute inset-y-0"
+              style={{ left: `calc(${clean * 100}% - 44px)`, width: 88 }}
+            >
+              {/* soft water band */}
+              <div
+                className="absolute inset-0"
+                style={{
+                  background:
+                    "linear-gradient(90deg, rgba(120,200,255,0) 0%, rgba(180,230,255,0.5) 50%, rgba(120,200,255,0) 100%)",
+                }}
+              />
+              {/* bright core beam */}
+              <div
+                className="absolute inset-y-0 left-1/2 w-[3px] -translate-x-1/2"
+                style={{
+                  background:
+                    "linear-gradient(180deg, transparent, rgba(210,240,255,0.95) 20%, rgba(210,240,255,0.95) 80%, transparent)",
+                  boxShadow: "0 0 34px 10px rgba(120,200,255,0.75)",
+                }}
+              />
+              {/* droplets sparkle */}
+              <div
+                className="absolute inset-0"
+                style={{
+                  background:
+                    "radial-gradient(2px 2px at 40% 30%, rgba(255,255,255,0.9), transparent), radial-gradient(1.5px 1.5px at 60% 60%, rgba(255,255,255,0.8), transparent), radial-gradient(1.5px 1.5px at 50% 80%, rgba(255,255,255,0.7), transparent)",
+                }}
+              />
+            </div>
+          )}
         </div>
-        {/* water sweep tied to scroll */}
-        <div
-          className="pointer-events-none absolute inset-y-0 w-[60%]"
-          style={{
-            left: `${-60 + clean * 120}%`,
-            background:
-              "linear-gradient(90deg, transparent, rgba(120,200,255,0.35), rgba(255,255,255,0.6), rgba(120,200,255,0.35), transparent)",
-          }}
-        />
-        <p className="absolute bottom-16 left-1/2 -translate-x-1/2 font-mono text-[11px] tracking-[0.3em] text-white/60">
-          DUST → CLEANING → CLEAN PANEL
-        </p>
+
+        {/* progress caption */}
+        <div className="mt-10 flex items-center gap-3 font-mono text-[11px] tracking-[0.3em]">
+          <span style={{ color: clean < 0.05 ? "var(--color-solar)" : "rgba(255,255,255,0.3)" }}>DUST</span>
+          <span className="text-white/25">→</span>
+          <span style={{ color: passing ? "var(--color-sensor)" : "rgba(255,255,255,0.3)" }}>CLEANING</span>
+          <span className="text-white/25">→</span>
+          <span style={{ color: clean > 0.95 ? "var(--color-leaf)" : "rgba(255,255,255,0.3)" }}>CLEAN PANEL</span>
+        </div>
       </div>
     </section>
   )
@@ -600,32 +743,10 @@ function WaterTransition() {
 /* ------------------------------------------------------------------ */
 
 function AppControl() {
-  const [panels, setPanels] = useState<PanelState[]>(["clean", "dust", "clean", "clean"])
-  const [busy, setBusy] = useState(false)
-  const [phase, setPhase] = useState<"idle" | "cleaning" | "done">("idle")
-
-  const cleanPanel = (idx: number) => {
-    if (busy) return
-    setBusy(true)
-    setPhase("cleaning")
-    setPanels((p) => p.map((s, i) => (i === idx ? "cleaning" : s)))
-    setTimeout(() => {
-      setPanels((p) => p.map((s, i) => (i === idx ? "clean" : s)))
-      setPhase("done")
-      setBusy(false)
-      setTimeout(() => setPhase("idle"), 2200)
-    }, 2600)
-  }
-
-  const reset = () => {
-    setPanels(["clean", "dust", "clean", "clean"])
-    setPhase("idle")
-  }
-
-  const target = panels.findIndex((s) => s === "dust")
+  const { panels, selected, setSelected, busy, phase, auto, setAuto, cleanPanel, dustyCount } = useSystem()
 
   return (
-    <section id="app" className="relative overflow-hidden py-28" style={{ background: "var(--color-ink)" }}>
+    <section id="app" className="relative overflow-hidden py-28" style={{ background: "var(--color-night)" }}>
       <DustField intensity={0.15} count={18} className="opacity-40" />
       <div className="mx-auto max-w-[1240px] px-6 text-white">
         <Reveal>
@@ -633,8 +754,8 @@ function AppControl() {
           <h2 className="mt-6 max-w-[760px] font-display text-[clamp(2rem,4.8vw,3.4rem)] font-600 leading-[1.05] tracking-[-0.02em]">
             Why clean every panel when only one needs attention?
           </h2>
-          <p className="mt-5 max-w-[480px] text-[17px] leading-relaxed text-white/55">
-            Control it from wherever you are. Tap a panel, watch it clean, done.
+          <p className="mt-5 max-w-[520px] text-[17px] leading-relaxed text-white/55">
+            Dust appears on one panel at a time. In automatic mode the system detects and cleans it on its own, then waits for the next. Switch to manual to select and clean a panel yourself.
           </p>
         </Reveal>
 
@@ -642,22 +763,41 @@ function AppControl() {
           {/* Array */}
           <Reveal>
             <div className="grid grid-cols-2 gap-6 sm:grid-cols-4">
-              {panels.map((s, i) => (
-                <div
-                  key={i}
-                  className="relative rounded-xl border p-3 transition-all"
-                  style={{
-                    borderColor: s === "dust" ? "rgba(255,176,32,0.6)" : "rgba(255,255,255,0.12)",
-                    background: "rgba(255,255,255,0.03)",
-                  }}
-                >
-                  {s === "dust" && (
-                    <span className="pulse-ring absolute inset-0 rounded-xl" style={{ background: "rgba(255,176,32,0.15)" }} />
-                  )}
-                  <SolarPanel dust={s === "dust" ? 0.6 : s === "cleaning" ? 0.25 : 0} state={s} scan={s === "cleaning"} />
-                  <p className="mt-2 font-mono text-[10px] tracking-[0.15em] text-white/40">PANEL 0{i + 1}</p>
-                </div>
-              ))}
+              {panels.map((s, i) => {
+                const isSelected = selected === i
+                return (
+                  <button
+                    key={i}
+                    type="button"
+                    onClick={() => setSelected(i)}
+                    className="group relative rounded-xl border p-3 text-left transition-all hover:-translate-y-0.5"
+                    style={{
+                      borderColor: isSelected
+                        ? "rgba(255,176,32,0.9)"
+                        : s === "dust"
+                        ? "rgba(255,176,32,0.5)"
+                        : "rgba(255,255,255,0.12)",
+                      background: isSelected ? "rgba(255,176,32,0.08)" : "rgba(255,255,255,0.03)",
+                      boxShadow: isSelected ? "0 0 0 3px rgba(255,176,32,0.18)" : "none",
+                    }}
+                  >
+                    {s === "dust" && (
+                      <span className="pulse-ring absolute inset-0 rounded-xl" style={{ background: "rgba(255,176,32,0.15)" }} />
+                    )}
+                    <SolarPanel dust={s === "dust" ? 0.6 : s === "cleaning" ? 0.25 : 0} state={s} scan={s === "cleaning"} />
+                    <div className="mt-2 flex items-center justify-between">
+                      <p className="font-mono text-[10px] tracking-[0.15em] text-white/40">PANEL 0{i + 1}</p>
+                      <span
+                        className="flex items-center gap-1 font-mono text-[9px]"
+                        style={{ color: STATE_COLOR[s] }}
+                      >
+                        <span className="h-1.5 w-1.5 rounded-full" style={{ background: STATE_COLOR[s] }} />
+                        {isSelected ? "SELECTED" : STATE_LABEL[s].toUpperCase()}
+                      </span>
+                    </div>
+                  </button>
+                )
+              })}
             </div>
           </Reveal>
 
@@ -673,48 +813,79 @@ function AppControl() {
                 </div>
 
                 <div className="mt-5 space-y-2.5">
-                  {panels.map((s, i) => (
-                    <div
-                      key={i}
-                      className="flex items-center justify-between rounded-lg px-3 py-2.5"
-                      style={{ background: "rgba(255,255,255,0.04)" }}
-                    >
-                      <span className="text-[13px] text-white/80">Panel 0{i + 1}</span>
-                      <span className="flex items-center gap-1.5 font-mono text-[10px]" style={{ color: STATE_COLOR[s] }}>
-                        <span className="h-2 w-2 rounded-full" style={{ background: STATE_COLOR[s] }} />
-                        {STATE_LABEL[s]}
-                      </span>
-                    </div>
-                  ))}
+                  {panels.map((s, i) => {
+                    const isSelected = selected === i
+                    return (
+                      <button
+                        key={i}
+                        type="button"
+                        onClick={() => setSelected(i)}
+                        className="flex w-full items-center justify-between rounded-lg px-3 py-2.5 transition-colors"
+                        style={{
+                          background: isSelected ? "rgba(255,176,32,0.12)" : "rgba(255,255,255,0.04)",
+                          boxShadow: isSelected ? "inset 0 0 0 1px rgba(255,176,32,0.5)" : "none",
+                        }}
+                      >
+                        <span className="text-[13px] text-white/80">Panel 0{i + 1}</span>
+                        <span className="flex items-center gap-1.5 font-mono text-[10px]" style={{ color: STATE_COLOR[s] }}>
+                          <span className="h-2 w-2 rounded-full" style={{ background: STATE_COLOR[s] }} />
+                          {STATE_LABEL[s]}
+                        </span>
+                      </button>
+                    )
+                  })}
                 </div>
 
-                <div className="mt-5">
+                {/* mode toggle */}
+                <div className="mt-5 grid grid-cols-2 gap-1 rounded-xl border border-white/10 bg-white/[0.04] p-1">
+                  {(["auto", "manual"] as const).map((m) => {
+                    const active = (m === "auto") === auto
+                    return (
+                      <button
+                        key={m}
+                        type="button"
+                        onClick={() => setAuto(m === "auto")}
+                        className="rounded-lg py-2 font-mono text-[10px] tracking-[0.14em] transition-colors"
+                        style={{
+                          background: active ? "linear-gradient(90deg, #ffce5c, #ffb020)" : "transparent",
+                          color: active ? "var(--color-night)" : "rgba(255,255,255,0.55)",
+                        }}
+                      >
+                        {m === "auto" ? "AUTOMATIC" : "MANUAL"}
+                      </button>
+                    )
+                  })}
+                </div>
+
+                <div className="mt-4">
                   {phase === "done" ? (
                     <div className="flex items-center justify-center gap-2 rounded-xl bg-emerald-500/15 py-3 font-mono text-[12px] tracking-[0.12em] text-emerald-400">
                       CLEANING COMPLETE ✓
                     </div>
                   ) : phase === "cleaning" ? (
                     <div className="flex items-center justify-center gap-2 rounded-xl bg-cyan-500/15 py-3 font-mono text-[12px] tracking-[0.12em] text-cyan-300">
-                      <span className="live-dot">CLEANING…</span>
+                      <span className="live-dot">{auto ? "AUTO CLEANING…" : "CLEANING…"}</span>
                     </div>
-                  ) : target >= 0 ? (
+                  ) : auto ? (
+                    <div className="flex items-center justify-center gap-2 rounded-xl border border-emerald-400/30 bg-emerald-500/10 py-3 font-mono text-[12px] tracking-[0.12em] text-emerald-400">
+                      <span className="live-dot h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                      {dustyCount > 0 ? "DETECTED · AUTO CLEANING" : "MONITORING…"}
+                    </div>
+                  ) : selected != null && panels[selected] === "dust" ? (
                     <button
-                      onClick={() => cleanPanel(target)}
-                      className="w-full rounded-xl py-3 font-mono text-[12px] tracking-[0.14em] text-ink transition-transform hover:scale-[1.02] active:scale-95"
+                      onClick={() => cleanPanel(selected)}
+                      className="w-full rounded-xl py-3 font-mono text-[12px] tracking-[0.14em] text-night transition-transform hover:scale-[1.02] active:scale-95"
                       style={{ background: "linear-gradient(90deg, #ffce5c, #ffb020)" }}
                     >
-                      CLEAN PANEL 0{target + 1}
+                      CLEAN PANEL 0{selected + 1}
                     </button>
                   ) : (
-                    <button
-                      onClick={reset}
-                      className="w-full rounded-xl border border-white/15 py-3 font-mono text-[12px] tracking-[0.14em] text-white/70 transition-colors hover:bg-white/5"
-                    >
-                      ALL CLEAN · RESET DEMO
-                    </button>
+                    <div className="w-full rounded-xl border border-white/15 py-3 text-center font-mono text-[12px] tracking-[0.14em] text-white/50">
+                      {dustyCount > 0 ? "SELECT THE DUSTY PANEL" : "ALL PANELS CLEAN"}
+                    </div>
                   )}
                   <p className="mt-3 text-center font-mono text-[9px] tracking-[0.1em] text-white/30">
-                    MANUAL CONTROL · TAP TO ACTIVATE
+                    {auto ? "SYSTEM CLEANS AUTOMATICALLY" : "MANUAL CONTROL · TAP TO ACTIVATE"}
                   </p>
                 </div>
               </div>
@@ -762,9 +933,6 @@ function Technology() {
                 </div>
                 <h3 className="mt-8 font-display text-[22px] font-600 tracking-tight">{p.t}</h3>
                 <p className="mt-2 text-[14px] leading-relaxed text-ink/55">{p.d}</p>
-                {i < parts.length - 1 && (
-                  <span className="mt-6 block font-mono text-[11px] text-ink/30">↓ connects to 0{i + 2 <= 6 ? i + 2 : ""}</span>
-                )}
               </div>
             </Reveal>
           ))}
@@ -779,14 +947,16 @@ function Technology() {
 /* ------------------------------------------------------------------ */
 
 function Dashboard() {
+  const { panels } = useSystem()
+  const count = (s: PanelState) => panels.filter((p) => p === s).length
   const stats = [
-    { k: "4", l: "Panels" },
-    { k: "1", l: "Requires Cleaning", c: "var(--color-solar)" },
-    { k: "1", l: "Cleaning", c: "var(--color-sensor)" },
-    { k: "2", l: "Clean", c: "var(--color-leaf)" },
+    { k: String(panels.length), l: "Panels" },
+    { k: String(count("dust")), l: "Requires Cleaning", c: "var(--color-solar)" },
+    { k: String(count("cleaning")), l: "Cleaning", c: "var(--color-sensor)" },
+    { k: String(count("clean")), l: "Clean", c: "var(--color-leaf)" },
   ]
   return (
-    <section className="relative overflow-hidden py-28" style={{ background: "var(--color-ink-soft)" }}>
+    <section className="relative overflow-hidden py-28" style={{ background: "var(--color-night-soft)" }}>
       <div className="grain-lines absolute inset-0 text-white/40" />
       <div className="relative mx-auto max-w-[1240px] px-6 text-white">
         <Reveal>
@@ -852,7 +1022,7 @@ function Future() {
               <div className="mb-6 flex items-center gap-3">
                 <span
                   className="flex h-9 w-9 items-center justify-center rounded-full font-mono text-[12px] text-white"
-                  style={{ background: "var(--color-ink)" }}
+                  style={{ background: "var(--color-night)" }}
                 >
                   {i + 1}
                 </span>
@@ -879,7 +1049,7 @@ function Final() {
   const { ref, progress } = useSectionProgress<HTMLDivElement>()
   const light = Math.min(1, progress * 1.5)
   return (
-    <section ref={ref} id="final" className="relative" style={{ background: "var(--color-ink)" }}>
+    <section ref={ref} id="final" className="relative" style={{ background: "var(--color-night)" }}>
       <div className="mx-auto flex max-w-[1240px] flex-col items-center px-6 py-40 text-center text-white">
         <div className="relative mb-14 w-[360px] max-w-[80vw]">
           <div
@@ -907,17 +1077,17 @@ function Final() {
           <div className="mt-12 flex flex-col items-center gap-4 sm:flex-row">
             <a
               href="#hero"
-              className="rounded-full px-8 py-4 font-mono text-[12px] tracking-[0.14em] text-ink transition-transform hover:scale-[1.03]"
+              className="rounded-full px-8 py-4 font-mono text-[12px] tracking-[0.14em] text-night transition-transform hover:scale-[1.03]"
               style={{ background: "linear-gradient(90deg, #ffce5c, #ffb020)" }}
             >
               EXPLORE THE PROTOTYPE
             </a>
-            <a
-              href="#app"
+            <Link
+              to="/contact"
               className="rounded-full border border-white/20 px-8 py-4 font-mono text-[12px] tracking-[0.14em] text-white/80 transition-colors hover:bg-white/5"
             >
               CONTACT OUR TEAM
-            </a>
+            </Link>
           </div>
         </Reveal>
       </div>
@@ -931,21 +1101,30 @@ function Final() {
 
 /* ------------------------------------------------------------------ */
 
-export default function App() {
+export default function Home() {
   return (
-    <div className="relative">
-      <Nav />
-      <Hero />
-      <Problem />
-      <Question />
-      <Reveal4 />
-      <HowItWorks />
-      <WaterTransition />
-      <AppControl />
-      <Technology />
-      <Dashboard />
-      <Future />
-      <Final />
-    </div>
+    <SystemProvider>
+      <div className="relative">
+        <Nav />
+        <Hero />
+        <Problem />
+        <Seam from="var(--color-paper)" to="var(--color-night)" />
+        <Question />
+        <Reveal4 />
+        <HowItWorks />
+        <Seam from="var(--color-mist)" to="#0b2033" />
+        <WaterTransition />
+        <Seam from="#0b2033" to="var(--color-night)" h={80} />
+        <AppControl />
+        <Seam from="var(--color-night)" to="var(--color-paper)" />
+        <Technology />
+        <Seam from="var(--color-paper)" to="var(--color-night-soft)" />
+        <Dashboard />
+        <Seam from="var(--color-night-soft)" to="var(--color-mist)" />
+        <Future />
+        <Seam from="var(--color-mist)" to="var(--color-night)" />
+        <Final />
+      </div>
+    </SystemProvider>
   )
 }

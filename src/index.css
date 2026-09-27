@@ -10,8 +10,13 @@
 
   --color-ink: #0a0e14;
   --color-ink-soft: #10151d;
-  --color-paper: #fbfbf9;
-  --color-mist: #f0f1ee;
+  --color-paper: #e9e6de;
+  --color-mist: #ddd8cd;
+  --color-card: #f4f1ea;
+
+  /* Always-dark surfaces for the art-directed story sections. */
+  --color-night: #0a0e14;
+  --color-night-soft: #10151d;
 
   --color-solar: #ffb020;
   --color-solar-deep: #f38b1c;
@@ -24,6 +29,17 @@
 :root {
   --background: var(--color-paper);
   --foreground: var(--color-ink);
+}
+
+/* Dark theme: flip neutral surfaces + text. Story sections use --color-night
+   tokens so they stay dark in both themes. text-ink is only used on light
+   surfaces (dark sections use text-white), so flipping ink→light is safe. */
+html.dark {
+  --color-ink: #eaf0f6;
+  --color-ink-soft: #c7d0da;
+  --color-paper: #0b0f16;
+  --color-mist: #10161f;
+  --color-card: #161d28;
 }
 
 * {
@@ -88,11 +104,20 @@ body {
 }
 
 @keyframes scanSweep {
-  0% { transform: translateX(-110%); }
-  100% { transform: translateX(110%); }
+  0% { transform: translateX(-120%); }
+  100% { transform: translateX(320%); }
 }
 .scan-line {
   animation: scanSweep 3.2s cubic-bezier(0.65, 0, 0.35, 1) infinite;
+}
+
+@keyframes rayGlow {
+  0%, 100% { opacity: 0.55; transform-origin: top; }
+  50% { opacity: 1; }
+}
+.sun-ray {
+  animation: rayGlow 4.5s ease-in-out infinite;
+  animation-delay: var(--ray-delay, 0s);
 }
 
 @keyframes sunPulse {
@@ -119,8 +144,8 @@ body {
 }
 
 @keyframes waterMove {
-  0% { transform: translateX(-100%); }
-  100% { transform: translateX(100%); }
+  0% { transform: translateX(-120%); }
+  100% { transform: translateX(300%); }
 }
 
 @keyframes shimmer {
@@ -141,3 +166,43 @@ body {
     transparent 1px 64px
   );
 }
+
+/* ---- Contact page entrance ---- */
+@keyframes pageEnter {
+  from { opacity: 0; transform: translateY(18px); }
+  to { opacity: 1; transform: none; }
+}
+.page-enter {
+  animation: pageEnter 800ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* ---- Leaflet on-brand overrides ---- */
+.solara-pin { background: transparent; border: none; }
+.solara-pin__ring {
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  width: 26px;
+  height: 10px;
+  transform: translateX(-50%);
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255,176,32,0.45), transparent 70%);
+}
+.leaflet-container {
+  background: var(--color-mist);
+  font-family: var(--font-mono);
+}
+.leaflet-bar,
+.leaflet-bar a {
+  background: var(--color-card);
+  color: color-mix(in oklab, var(--color-ink) 75%, transparent);
+  border-color: color-mix(in oklab, var(--color-ink) 14%, transparent) !important;
+}
+.leaflet-bar a:hover { background: var(--color-mist); }
+.leaflet-control-attribution {
+  background: color-mix(in oklab, var(--color-paper) 72%, transparent) !important;
+  color: color-mix(in oklab, var(--color-ink) 45%, transparent) !important;
+}
+.leaflet-control-attribution a { color: color-mix(in oklab, var(--color-ink) 60%, transparent) !important; }
+
+html.dark .leaflet-container { background: #05090f; }

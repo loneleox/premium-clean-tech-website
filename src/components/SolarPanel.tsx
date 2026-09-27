@@ -11,11 +11,13 @@ export function SolarPanel({
   dust = 0,
   state,
   scan = false,
+  wipe,
   className = "",
 }: {
   dust?: number // 0..1
   state?: PanelState
   scan?: boolean
+  wipe?: number // 0..1 — clips dust from the left so cleaning "wipes" across
   className?: string
 }) {
   const cells = Array.from({ length: 24 })
@@ -62,11 +64,15 @@ export function SolarPanel({
           }}
         />
 
-        {/* dust overlay */}
+        {/* dust overlay — clipped from the left when a wipe is passing */}
         <div
           className="pointer-events-none absolute inset-0 transition-opacity duration-700"
           style={{
             opacity: dust,
+            clipPath:
+              wipe != null
+                ? `inset(0 0 0 ${Math.min(100, Math.max(0, wipe * 100))}%)`
+                : undefined,
             background:
               "radial-gradient(120% 90% at 30% 20%, rgba(200,182,148,0.85), rgba(163,142,103,0.55) 55%, rgba(120,102,72,0.7))",
             mixBlendMode: "multiply",

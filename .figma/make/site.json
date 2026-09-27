@@ -1,0 +1,10 @@
+{
+  "description": "Interactive website showcasing a smart solar panel cleaning system that detects dust, automates cleaning, and offers remote control for efficient maintenance.",
+  "robots": {
+    "index": false
+  },
+  "accessibility": {
+    "addBypassLinks": false,
+    "ignoreReducedMotion": false
+  }
+}

@@ -1,3 +1,4 @@
+import VisitorTracker from './VisitorTracker'
 import { createContext, Fragment, useContext, useEffect, useRef, useState } from "react"
 import { Link } from "react-router"
 import { DustField } from "./components/DustField"
@@ -1104,6 +1105,7 @@ function Final() {
 export default function Home() {
   return (
     <SystemProvider>
+      <VisitorTracker />
       <div className="relative">
         <Nav />
         <Hero />

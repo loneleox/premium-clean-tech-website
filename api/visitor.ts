@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
-import UAParser from 'ua-parser-js'
+import { UAParser } from 'ua-parser-js'
 
 const supabase = createClient(
   process.env.SUPABASE_URL!,

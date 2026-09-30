@@ -19,7 +19,10 @@ export function useReveal<T extends HTMLElement = HTMLDivElement>(
           setShown(false)
         }
       },
-      { threshold: options?.threshold ?? 0.2 },
+      { 
+        threshold: options?.threshold ?? 0.05,
+        rootMargin: "0px 0px 10% 0px",
+      },
     )
     io.observe(el)
     return () => io.disconnect()

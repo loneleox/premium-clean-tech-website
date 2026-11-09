@@ -1,9 +1,21 @@
 import VisitorTracker from './VisitorTracker'
 import { createContext, Fragment, useContext, useEffect, useRef, useState } from "react"
 import { Link } from "react-router"
+import { CleanSlider } from "./components/CleanSlider"
 import { DustField } from "./components/DustField"
+import { Magnetic } from "./components/Magnetic"
+import { SpecTicker } from "./components/SpecTicker"
+import { SplitText } from "./components/SplitText"
+import { TiltCard } from "./components/TiltCard"
 import { PanelState, SolarPanel } from "./components/SolarPanel"
-import { useReveal, useSectionProgress } from "./lib/scroll"
+import {
+  useActiveSection,
+  useHeaderFormation,
+  useReveal,
+  useScrollLink,
+  useSectionProgress,
+} from "./lib/scroll"
+import { ScrollProgress, useCountUp } from "./lib/motion"
 import { ThemeToggle } from "./lib/theme"
 
 /* ------------------------------------------------------------------ */
@@ -110,17 +122,19 @@ function SystemProvider({ children }: { children: React.ReactNode }) {
 function Reveal({
   children,
   delay = 0,
+  from = "up",
   className = "",
 }: {
   children: React.ReactNode
   delay?: number
+  from?: "up" | "left" | "right"
   className?: string
 }) {
   const { ref, shown } = useReveal<HTMLDivElement>()
   return (
     <div
       ref={ref}
-      className={`reveal ${shown ? "in" : ""} ${className}`}
+      className={`reveal ${from !== "up" ? `reveal--${from}` : ""} ${shown ? "in" : ""} ${className}`}
       style={{ ["--reveal-delay" as string]: `${delay}ms` }}
     >
       {children}
@@ -157,56 +171,117 @@ function Seam({ from, to, h = 110 }: { from: string; to: string; h?: number }) {
 /* Nav                                                                 */
 /* ------------------------------------------------------------------ */
 
+const SECTIONS = [
+  { id: "problem", label: "PROBLEM" },
+  { id: "solution", label: "SYSTEM" },
+  { id: "app", label: "APP" },
+  { id: "future", label: "FUTURE" },
+]
+
 function Nav() {
-  const [scrolled, setScrolled] = useState(false)
+  const headerRef = useHeaderFormation<HTMLElement>()
+  const [open, setOpen] = useState(false)
+  const active = useActiveSection(SECTIONS.map((s) => s.id))
+
+  // Lock the page and allow Escape to dismiss the mobile sheet.
   useEffect(() => {
-    const on = () => setScrolled(window.scrollY > 40)
-    on()
-    window.addEventListener("scroll", on, { passive: true })
-    return () => window.removeEventListener("scroll", on)
-  }, [])
+    document.body.style.overflow = open ? "hidden" : ""
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false)
+    }
+    window.addEventListener("keydown", onKey)
+    return () => {
+      document.body.style.overflow = ""
+      window.removeEventListener("keydown", onKey)
+    }
+  }, [open])
+
   return (
-    <header
-      className={`fixed inset-x-0 top-0 z-50 transition-all duration-500 ${
-        scrolled ? "backdrop-blur-xl" : ""
-      }`}
-      style={{
-        background: scrolled
-          ? "color-mix(in oklab, var(--color-paper) 72%, transparent)"
-          : "transparent",
-        borderBottom: scrolled
-          ? "1px solid color-mix(in oklab, var(--color-ink) 10%, transparent)"
-          : "1px solid transparent",
-      }}
-    >
-      <div className="mx-auto flex max-w-[1240px] items-center justify-between px-6 py-4">
-        <div className="flex items-center gap-2.5">
-          <div className="relative h-6 w-6">
-            <div
-              className="sun-core absolute inset-0 rounded-full"
-              style={{ background: "radial-gradient(circle, #ffce5c, #f38b1c)" }}
-            />
+    <>
+      <header ref={headerRef} className="site-header nav-enter">
+        <div className="site-header__inner">
+          <a href="#hero" className="site-brand" onClick={() => setOpen(false)}>
+            <span className="relative h-6 w-6">
+              <span
+                className="sun-core absolute inset-0 rounded-full"
+                style={{
+                  background: "radial-gradient(circle at 38% 32%, #ffd98c, #e58a2b 62%, #c96f18)",
+                }}
+              />
+            </span>
+            <span className="font-display text-[15px] font-600 tracking-tight">SOLARA</span>
+          </a>
+
+          <nav aria-label="Sections" className="site-nav hidden items-center md:flex">
+            {SECTIONS.map((s) => (
+              <a
+                key={s.id}
+                href={`#${s.id}`}
+                className={`site-nav__link ${active === s.id ? "is-active" : ""}`}
+                aria-current={active === s.id ? "true" : undefined}
+              >
+                {s.label}
+              </a>
+            ))}
+          </nav>
+
+          <div className="ml-auto flex items-center gap-2 md:ml-0">
+            <ThemeToggle />
+            <Link
+              to="/contact"
+              className="btn-sheen header-cta hidden text-white sm:inline-flex"
+              style={{ background: "var(--color-night)" }}
+            >
+              CONTACT
+            </Link>
+            <button
+              type="button"
+              onClick={() => setOpen((v) => !v)}
+              aria-expanded={open}
+              aria-label={open ? "Close menu" : "Open menu"}
+              className={`menu-btn inline-flex md:hidden ${open ? "is-open" : ""}`}
+            >
+              <span />
+              <span />
+            </button>
           </div>
-          <span className="font-display text-[15px] font-600 tracking-tight">SOLARA</span>
         </div>
-        <nav className="hidden items-center gap-8 font-mono text-[11px] tracking-[0.15em] text-ink/60 md:flex">
-          <a href="#problem" className="transition-colors hover:text-ink">PROBLEM</a>
-          <a href="#solution" className="transition-colors hover:text-ink">SYSTEM</a>
-          <a href="#app" className="transition-colors hover:text-ink">APP</a>
-          <a href="#future" className="transition-colors hover:text-ink">FUTURE</a>
-        </nav>
-        <div className="flex items-center gap-3">
-          <ThemeToggle />
-          <Link
-            to="/contact"
-            className="rounded-full px-4 py-2 font-mono text-[11px] tracking-[0.12em] text-white transition-transform hover:scale-[1.03]"
-            style={{ background: "var(--color-night)" }}
+      </header>
+
+      <div
+        className={`mobile-menu fixed inset-0 z-[45] flex flex-col justify-center px-6 pb-10 pt-[104px] md:hidden ${
+          open ? "is-open" : ""
+        }`}
+        aria-hidden={!open}
+      >
+        {SECTIONS.map((s, i) => (
+          <a
+            key={s.id}
+            href={`#${s.id}`}
+            className="mobile-menu__link"
+            style={{ ["--i" as string]: `${i}` }}
+            onClick={() => setOpen(false)}
           >
-            CONTACT
-          </Link>
+            <span>{s.label}</span>
+            <span className="mobile-menu__index">0{i + 1}</span>
+          </a>
+        ))}
+        <Link
+          to="/contact"
+          className="mobile-menu__link"
+          style={{ ["--i" as string]: `${SECTIONS.length}` }}
+          onClick={() => setOpen(false)}
+        >
+          <span>CONTACT</span>
+          <span className="mobile-menu__index">05</span>
+        </Link>
+        <div className="mobile-menu__foot">
+          <p className="font-mono text-[10px] tracking-[0.22em] text-ink/40">
+            SMART SOLAR PANEL CLEANING SYSTEM
+          </p>
         </div>
       </div>
-    </header>
+    </>
   )
 }
 
@@ -216,6 +291,37 @@ function Nav() {
 
 function Hero() {
   const { ref, progress } = useSectionProgress<HTMLDivElement>()
+  const sceneRef = useRef<HTMLDivElement | null>(null)
+
+  // A shallow pointer parallax: the sun and panel drift against the cursor.
+  useEffect(() => {
+    const el = sceneRef.current
+    if (!el) return
+    if (window.matchMedia("(pointer: coarse)").matches) return
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return
+    let raf = 0
+    const onMove = (e: PointerEvent) => {
+      if (raf) return
+      raf = requestAnimationFrame(() => {
+        raf = 0
+        const r = el.getBoundingClientRect()
+        el.style.setProperty("--mx", ((e.clientX - r.left) / r.width - 0.5).toFixed(3))
+        el.style.setProperty("--my", ((e.clientY - r.top) / r.height - 0.5).toFixed(3))
+      })
+    }
+    const reset = () => {
+      el.style.setProperty("--mx", "0")
+      el.style.setProperty("--my", "0")
+    }
+    window.addEventListener("pointermove", onMove, { passive: true })
+    document.addEventListener("pointerleave", reset)
+    return () => {
+      window.removeEventListener("pointermove", onMove)
+      document.removeEventListener("pointerleave", reset)
+      if (raf) cancelAnimationFrame(raf)
+    }
+  }, [])
+
   // panel grows / tilts as we scroll; dust builds in the back half
   const scale = 0.7 + progress * 0.9
   const rotate = 24 - progress * 24
@@ -225,26 +331,40 @@ function Hero() {
 
   return (
     <section ref={ref} className="relative h-[220vh]" id="hero">
-      <div className="sticky top-0 flex h-screen flex-col items-center justify-center overflow-hidden">
-        {/* sky gradient ground */}
+      <div ref={sceneRef} className="sticky top-0 flex h-screen flex-col items-center justify-center overflow-hidden">
+        {/* daylight wash + fine engineering grid */}
         <div
           className="absolute inset-0"
           style={{
             background:
-              "linear-gradient(180deg, color-mix(in oklab, var(--color-solar) 22%, var(--color-paper)) 0%, color-mix(in oklab, var(--color-solar) 8%, var(--color-paper)) 24%, var(--color-paper) 62%)",
+              "linear-gradient(180deg, color-mix(in oklab, var(--color-solar) 14%, var(--color-paper)) 0%, color-mix(in oklab, var(--color-solar) 5%, var(--color-paper)) 24%, var(--color-paper) 60%)",
+          }}
+        />
+        <div
+          aria-hidden
+          className="tech-grid"
+          style={{ transform: `translate3d(0, ${progress * 80}px, 0)` }}
+        />
+        <div
+          aria-hidden
+          className="pointer-events-none absolute left-1/2 top-[12%] h-[440px] w-[440px] -translate-x-1/2 rounded-full"
+          style={{
+            background:
+              "radial-gradient(circle, color-mix(in oklab, var(--color-solar) 20%, transparent), transparent 68%)",
           }}
         />
         {/* sun */}
         <div
           className="absolute left-1/2 top-[14%] -translate-x-1/2"
-          style={{ transform: `translate(-50%, ${sunY}px)`, opacity: sunOpacity }}
+          style={{ transform: `translate(-50%, ${sunY}px) translate3d(calc(var(--mx, 0) * 18px), calc(var(--my, 0) * 12px), 0)`, opacity: sunOpacity }}
         >
           <div className="relative">
             <div
               className="sun-core h-40 w-40 rounded-full"
               style={{
-                background: "radial-gradient(circle, #ffe08a 0%, #ffbe3d 45%, #f38b1c 100%)",
-                boxShadow: "0 0 120px 40px rgba(255,176,32,0.45)",
+                background:
+                  "radial-gradient(circle at 40% 34%, #ffe3a6 0%, #f7bf5f 38%, #e58a2b 72%, #c96f18 100%)",
+                boxShadow: "0 0 90px 26px rgba(229,138,43,0.28)",
               }}
             />
             {/* light beams radiating around the sun */}
@@ -253,12 +373,12 @@ function Hero() {
                 key={i}
                 className="sun-ray absolute left-1/2 top-1/2 origin-top"
                 style={{
-                  width: i % 2 === 0 ? 4 : 2.5,
+                  width: i % 2 === 0 ? 3 : 2,
                   height: 320,
                   transform: `translate(-50%, 0) rotate(${i * (360 / 16)}deg)`,
                   background:
-                    "linear-gradient(180deg, rgba(255,206,92,0.95) 0%, rgba(255,176,32,0.55) 40%, transparent 100%)",
-                  filter: "blur(0.5px) drop-shadow(0 0 6px rgba(255,190,61,0.65))",
+                    "linear-gradient(180deg, color-mix(in oklab, var(--color-solar) 55%, transparent) 0%, transparent 100%)",
+                  filter: "blur(0.5px)",
                   ["--ray-delay" as string]: `${i * 0.25}s`,
                 }}
               />
@@ -268,28 +388,51 @@ function Hero() {
 
         {/* headline */}
         <div
-          className="relative z-10 mx-auto max-w-[900px] px-6 text-center"
-          style={{ opacity: Math.max(0, 1 - Math.max(0, progress - 0.32) * 3.4) }}
+          className="hero-copy relative z-10 mx-auto max-w-[900px] px-6 text-center"
+          style={{
+            opacity: Math.max(0, 1 - Math.max(0, progress - 0.32) * 3.4),
+            transform: `translate3d(0, ${-progress * 80}px, 0)`,
+          }}
         >
-          <p className="mb-6 font-mono text-[11px] tracking-[0.3em]" style={{ color: "var(--color-ink)", opacity: 0.75 }}>
+          <p
+            className="hero-intro mb-6 font-mono text-[11px] tracking-[0.3em]"
+            style={{
+              color: "var(--color-ink)",
+              opacity: 0.75,
+              ["--intro-opacity" as string]: "0.75",
+              ["--intro-delay" as string]: "140ms",
+            }}
+          >
             SMART SOLAR PANEL CLEANING SYSTEM
           </p>
           <h1
             className="font-display text-[clamp(2.2rem,6vw,4.6rem)] font-700 leading-[1.02] tracking-[-0.02em]"
             style={{ color: "var(--color-ink)" }}
           >
-            What if your solar panels could tell you when they need cleaning?
+            <span className="line-mask">
+              <span style={{ ["--intro-delay" as string]: "240ms" }}>
+                What if your solar panels could tell you when they need cleaning?
+              </span>
+            </span>
           </h1>
-          <p className="mx-auto mt-6 max-w-[520px] text-[17px] leading-relaxed" style={{ color: "var(--color-ink)", opacity: 0.85 }}>
+          <p
+            className="hero-intro mx-auto mt-6 max-w-[520px] text-[17px] leading-relaxed"
+            style={{
+              color: "var(--color-ink)",
+              opacity: 0.85,
+              ["--intro-opacity" as string]: "0.85",
+              ["--intro-delay" as string]: "420ms",
+            }}
+          >
             Detect the dust. Clean when needed. Control every panel.
           </p>
         </div>
 
         {/* panel that grows toward viewer */}
         <div
-          className="absolute bottom-[-6%] left-1/2 z-0 w-[440px] max-w-[80vw] -translate-x-1/2"
+          className="hero-panel absolute bottom-[-6%] left-1/2 z-0 w-[440px] max-w-[80vw] -translate-x-1/2"
           style={{
-            transform: `translateX(-50%) perspective(1200px) rotateX(${rotate}deg) scale(${scale})`,
+            transform: `translateX(-50%) perspective(1200px) rotateX(${rotate}deg) scale(${scale}) translate3d(calc(var(--mx, 0) * 14px), calc(var(--my, 0) * 8px), 0)`,
           }}
         >
           <SolarPanel dust={dust} />
@@ -425,6 +568,7 @@ function Reveal4() {
   ]
   return (
     <section id="solution" className="relative overflow-hidden bg-paper py-32">
+
       <div
         className="absolute inset-x-0 top-0 h-40"
         style={{ background: "linear-gradient(180deg, var(--color-night), transparent)" }}
@@ -435,7 +579,7 @@ function Reveal4() {
         </Reveal>
         <Reveal delay={80}>
           <h2 className="mt-6 max-w-[820px] font-display text-[clamp(2.2rem,5.5vw,4rem)] font-600 leading-[1.03] tracking-[-0.025em]">
-            Meet our Smart Solar Panel Cleaning System.
+            <SplitText text="Meet our Smart Solar Panel Cleaning System." delay={60} />
           </h2>
         </Reveal>
         <Reveal delay={160}>
@@ -444,35 +588,37 @@ function Reveal4() {
           </p>
         </Reveal>
 
-        <Reveal delay={200} className="mt-20">
+        <div className="mt-20">
           <div className="relative grid items-center gap-6 md:grid-cols-[1.1fr_auto_0.9fr_auto_0.9fr_auto_0.9fr]">
             {/* hero panel */}
-            <div className="rounded-2xl border border-ink/10 bg-card/70 p-6 shadow-xl backdrop-blur">
-              <SolarPanel dust={0} scan />
-              <p className="mt-4 font-mono text-[11px] tracking-[0.15em] text-ink/50">LIVE INSTALLATION · ARRAY A</p>
-            </div>
+            <Reveal from="left" delay={120}>
+              <TiltCard className="lift-card rounded-2xl border border-ink/10 bg-card/70 p-6 shadow-xl backdrop-blur">
+                <SolarPanel dust={0} scan />
+                <p className="mt-4 font-mono text-[11px] tracking-[0.15em] text-ink/50">LIVE INSTALLATION · ARRAY A</p>
+              </TiltCard>
+            </Reveal>
 
             {/* chain */}
             <ChainArrow />
             {chain.map((c, i) => (
               <Fragment key={c.label}>
-                <div
-                  className="rounded-2xl border border-ink/10 bg-card p-6 text-center shadow-sm"
-                >
-                  <span
-                    className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-full"
-                    style={{ background: `color-mix(in oklab, ${c.color} 18%, var(--color-card))` }}
-                  >
-                    <span className="h-3 w-3 rounded-full" style={{ background: c.color }} />
-                  </span>
-                  <p className="font-display text-[15px] font-600">{c.label}</p>
-                  <p className="mt-1 font-mono text-[11px] text-ink/45">{c.desc}</p>
-                </div>
+                <Reveal from={i % 2 === 1 ? "right" : "left"} delay={220 + i * 150}>
+                  <div className="lift-card rounded-2xl border border-ink/10 bg-card p-6 text-center shadow-sm">
+                    <span
+                      className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-full"
+                      style={{ background: `color-mix(in oklab, ${c.color} 18%, var(--color-card))` }}
+                    >
+                      <span className="h-3 w-3 rounded-full" style={{ background: c.color }} />
+                    </span>
+                    <p className="font-display text-[15px] font-600">{c.label}</p>
+                    <p className="mt-1 font-mono text-[11px] text-ink/45">{c.desc}</p>
+                  </div>
+                </Reveal>
                 {i < chain.length - 1 && <ChainArrow />}
               </Fragment>
             ))}
           </div>
-        </Reveal>
+        </div>
       </div>
     </section>
   )
@@ -535,7 +681,7 @@ function HowItWorks() {
       n: "03",
       title: "CLEAN",
       body: "Water or air is activated and moves smoothly across the panel surface.",
-      render: () => <CleaningPanel />,
+      render: () => <CleanSlider />,
     },
     {
       n: "04",
@@ -544,19 +690,26 @@ function HowItWorks() {
       render: () => <MiniPhone />,
     },
   ]
+  const railRef = useScrollLink<HTMLDivElement>()
   return (
     <section className="relative bg-mist py-28">
-      <div className="mx-auto max-w-[1240px] px-6">
+
+      <div ref={railRef} className="mx-auto max-w-[1240px] px-6">
         <Reveal>
           <Kicker n="03" label="HOW IT WORKS" />
           <h2 className="mt-6 font-display text-[clamp(2rem,4.6vw,3.2rem)] font-600 tracking-[-0.02em]">
-            Four steps, one continuous loop.
+            <SplitText text="Four steps, one continuous loop." />
           </h2>
         </Reveal>
 
-        <div className="mt-16 flex flex-col gap-24">
+        <div className="relative mt-16">
+          <div aria-hidden className="scroll-rail hidden md:block">
+            <span className="scroll-rail__fill" />
+            <span className="scroll-rail__dot" />
+          </div>
+          <div className="flex flex-col gap-24 md:pl-14">
           {steps.map((s, i) => (
-            <Reveal key={s.n}>
+            <Reveal key={s.n} from={i % 2 === 0 ? "right" : "left"}>
               <div
                 className={`grid items-center gap-10 md:grid-cols-2 ${
                   i % 2 === 1 ? "md:[&>*:first-child]:order-2" : ""
@@ -579,6 +732,7 @@ function HowItWorks() {
               </div>
             </Reveal>
           ))}
+          </div>
         </div>
       </div>
     </section>
@@ -603,25 +757,6 @@ function Meter({ label, value, color, muted = false }: { label: string; value: n
   )
 }
 
-function CleaningPanel() {
-  const { ref, shown } = useReveal<HTMLDivElement>({ once: false })
-  return (
-    <div ref={ref} className="relative overflow-hidden rounded-2xl">
-      <SolarPanel dust={shown ? 0 : 0.6} />
-      {shown && (
-        <div
-          className="pointer-events-none absolute inset-0"
-          style={{
-            background:
-              "linear-gradient(90deg, transparent, rgba(120,200,255,0.5), rgba(255,255,255,0.7), rgba(120,200,255,0.5), transparent)",
-            width: "40%",
-            animation: "waterMove 2.4s ease-in-out infinite",
-          }}
-        />
-      )}
-    </div>
-  )
-}
 
 function MiniPhone() {
   return (
@@ -674,8 +809,7 @@ function WaterTransition() {
   const clean = Math.min(1, Math.max(0, (progress - 0.34) / 0.32))
   const passing = clean > 0.02 && clean < 0.98
   return (
-    <section ref={ref} className="relative h-[200vh]">
-      <div className="sticky top-0 flex h-screen flex-col items-center justify-center overflow-hidden" style={{ background: "#0b2033" }}>
+    <section ref={ref} className="relative h-[200vh]">        <div className="sticky top-0 flex h-screen flex-col items-center justify-center overflow-hidden" style={{ background: "#0a1a26" }}>
         <div className="relative w-[560px] max-w-[88vw]">
           {/* dusty panel; dust is wiped away to the left of the ray */}
           <SolarPanel dust={0.85} wipe={clean} />
@@ -753,7 +887,7 @@ function AppControl() {
         <Reveal>
           <Kicker n="04" label="SMART CONTROL" dark />
           <h2 className="mt-6 max-w-[760px] font-display text-[clamp(2rem,4.8vw,3.4rem)] font-600 leading-[1.05] tracking-[-0.02em]">
-            Why clean every panel when only one needs attention?
+            <SplitText text="Why clean every panel when only one needs attention?" />
           </h2>
           <p className="mt-5 max-w-[520px] text-[17px] leading-relaxed text-white/55">
             Dust appears on one panel at a time. In automatic mode the system detects and cleans it on its own, then waits for the next. Switch to manual to select and clean a panel yourself.
@@ -762,7 +896,7 @@ function AppControl() {
 
         <div className="mt-16 grid items-center gap-14 lg:grid-cols-[1fr_360px]">
           {/* Array */}
-          <Reveal>
+          <Reveal from="right">
             <div className="grid grid-cols-2 gap-6 sm:grid-cols-4">
               {panels.map((s, i) => {
                 const isSelected = selected === i
@@ -774,16 +908,16 @@ function AppControl() {
                     className="group relative rounded-xl border p-3 text-left transition-all hover:-translate-y-0.5"
                     style={{
                       borderColor: isSelected
-                        ? "rgba(255,176,32,0.9)"
+                        ? "rgba(229,138,43,0.9)"
                         : s === "dust"
-                        ? "rgba(255,176,32,0.5)"
+                        ? "rgba(229,138,43,0.55)"
                         : "rgba(255,255,255,0.12)",
-                      background: isSelected ? "rgba(255,176,32,0.08)" : "rgba(255,255,255,0.03)",
-                      boxShadow: isSelected ? "0 0 0 3px rgba(255,176,32,0.18)" : "none",
+                      background: isSelected ? "rgba(229,138,43,0.08)" : "rgba(255,255,255,0.03)",
+                      boxShadow: isSelected ? "0 0 0 3px rgba(229,138,43,0.18)" : "none",
                     }}
                   >
                     {s === "dust" && (
-                      <span className="pulse-ring absolute inset-0 rounded-xl" style={{ background: "rgba(255,176,32,0.15)" }} />
+                      <span className="pulse-ring absolute inset-0 rounded-xl" style={{ background: "rgba(229,138,43,0.15)" }} />
                     )}
                     <SolarPanel dust={s === "dust" ? 0.6 : s === "cleaning" ? 0.25 : 0} state={s} scan={s === "cleaning"} />
                     <div className="mt-2 flex items-center justify-between">
@@ -803,7 +937,7 @@ function AppControl() {
           </Reveal>
 
           {/* Phone dashboard */}
-          <Reveal delay={120}>
+          <Reveal delay={120} from="left">
             <div className="mx-auto w-[300px] rounded-[36px] border-[6px] border-white/15 bg-[#05090f] p-3 shadow-2xl">
               <div className="rounded-[26px] bg-gradient-to-b from-[#0d141d] to-[#070b11] p-5">
                 <div className="flex items-center justify-between">
@@ -823,8 +957,8 @@ function AppControl() {
                         onClick={() => setSelected(i)}
                         className="flex w-full items-center justify-between rounded-lg px-3 py-2.5 transition-colors"
                         style={{
-                          background: isSelected ? "rgba(255,176,32,0.12)" : "rgba(255,255,255,0.04)",
-                          boxShadow: isSelected ? "inset 0 0 0 1px rgba(255,176,32,0.5)" : "none",
+                          background: isSelected ? "rgba(229,138,43,0.12)" : "rgba(255,255,255,0.04)",
+                          boxShadow: isSelected ? "inset 0 0 0 1px rgba(229,138,43,0.55)" : "none",
                         }}
                       >
                         <span className="text-[13px] text-white/80">Panel 0{i + 1}</span>
@@ -848,7 +982,7 @@ function AppControl() {
                         onClick={() => setAuto(m === "auto")}
                         className="rounded-lg py-2 font-mono text-[10px] tracking-[0.14em] transition-colors"
                         style={{
-                          background: active ? "linear-gradient(90deg, #ffce5c, #ffb020)" : "transparent",
+                          background: active ? "linear-gradient(90deg, var(--color-solar), var(--color-solar-deep))" : "transparent",
                           color: active ? "var(--color-night)" : "rgba(255,255,255,0.55)",
                         }}
                       >
@@ -875,8 +1009,8 @@ function AppControl() {
                   ) : selected != null && panels[selected] === "dust" ? (
                     <button
                       onClick={() => cleanPanel(selected)}
-                      className="w-full rounded-xl py-3 font-mono text-[12px] tracking-[0.14em] text-night transition-transform hover:scale-[1.02] active:scale-95"
-                      style={{ background: "linear-gradient(90deg, #ffce5c, #ffb020)" }}
+                      className="btn-sheen w-full rounded-xl py-3 font-mono text-[12px] tracking-[0.14em] text-night transition-transform hover:scale-[1.02] active:scale-95"
+                      style={{ background: "linear-gradient(90deg, var(--color-solar), var(--color-solar-deep))" }}
                     >
                       CLEAN PANEL 0{selected + 1}
                     </button>
@@ -911,20 +1045,25 @@ function Technology() {
     { n: "05", t: "Cleaning Nozzle", d: "Even water / air distribution" },
     { n: "06", t: "Mobile Application", d: "Status, control & alerts" },
   ]
+  const deckRef = useScrollLink<HTMLDivElement>()
   return (
     <section className="relative bg-paper py-28">
+
       <div className="mx-auto max-w-[1240px] px-6">
         <Reveal>
           <Kicker n="05" label="ARCHITECTURE" />
           <h2 className="mt-6 max-w-[680px] font-display text-[clamp(2rem,4.6vw,3.2rem)] font-600 tracking-[-0.02em]">
-            Six components. One coordinated system.
+            <SplitText text="Six components. One coordinated system." />
           </h2>
         </Reveal>
 
-        <div className="mt-16 grid gap-px overflow-hidden rounded-2xl border border-ink/10 bg-ink/10 md:grid-cols-3">
+        <div
+          ref={deckRef}
+          className="tech-deck mt-16 grid gap-px overflow-hidden rounded-2xl border border-ink/10 bg-ink/10 md:grid-cols-3"
+        >
           {parts.map((p, i) => (
-            <Reveal key={p.n} delay={i * 70}>
-              <div className="group relative h-full bg-paper p-8 transition-colors hover:bg-mist">
+            <Reveal key={p.n} delay={i * 120} from={i % 2 === 1 ? "right" : "left"}>
+              <TiltCard className="lift-card group relative h-full bg-paper p-8 transition-colors hover:bg-mist">
                 <div className="flex items-center justify-between">
                   <span className="font-mono text-[12px] tracking-[0.2em] text-ink/40">{p.n}</span>
                   <span
@@ -934,7 +1073,7 @@ function Technology() {
                 </div>
                 <h3 className="mt-8 font-display text-[22px] font-600 tracking-tight">{p.t}</h3>
                 <p className="mt-2 text-[14px] leading-relaxed text-ink/55">{p.d}</p>
-              </div>
+              </TiltCard>
             </Reveal>
           ))}
         </div>
@@ -951,10 +1090,10 @@ function Dashboard() {
   const { panels } = useSystem()
   const count = (s: PanelState) => panels.filter((p) => p === s).length
   const stats = [
-    { k: String(panels.length), l: "Panels" },
-    { k: String(count("dust")), l: "Requires Cleaning", c: "var(--color-solar)" },
-    { k: String(count("cleaning")), l: "Cleaning", c: "var(--color-sensor)" },
-    { k: String(count("clean")), l: "Clean", c: "var(--color-leaf)" },
+    { k: panels.length, l: "Panels" },
+    { k: count("dust"), l: "Requires Cleaning", c: "var(--color-solar)" },
+    { k: count("cleaning"), l: "Cleaning", c: "var(--color-sensor)" },
+    { k: count("clean"), l: "Clean", c: "var(--color-leaf)" },
   ]
   return (
     <section className="relative overflow-hidden py-28" style={{ background: "var(--color-night-soft)" }}>
@@ -965,7 +1104,7 @@ function Dashboard() {
             <div>
               <Kicker n="06" label="SMART MONITORING" dark />
               <h2 className="mt-6 font-display text-[clamp(2rem,4.6vw,3.2rem)] font-600 tracking-[-0.02em]">
-                System online.
+                <SplitText text="System online." />
               </h2>
             </div>
             <span className="flex items-center gap-2 font-mono text-[12px] tracking-[0.15em] text-emerald-400">
@@ -974,15 +1113,10 @@ function Dashboard() {
           </div>
         </Reveal>
 
-        <Reveal delay={120}>
+        <Reveal delay={120} from="right">
           <div className="mt-14 grid gap-px overflow-hidden rounded-2xl border border-white/10 bg-white/5 sm:grid-cols-2 lg:grid-cols-4">
             {stats.map((s) => (
-              <div key={s.l} className="bg-[#0b1017] p-8">
-                <p className="font-display text-[52px] font-700 leading-none" style={{ color: s.c ?? "#fff" }}>
-                  {s.k}
-                </p>
-                <p className="mt-3 font-mono text-[11px] tracking-[0.15em] text-white/45">{s.l.toUpperCase()}</p>
-              </div>
+              <Stat key={s.l} value={s.k} label={s.l} color={s.c} total={panels.length} />
             ))}
           </div>
         </Reveal>
@@ -991,53 +1125,136 @@ function Dashboard() {
   )
 }
 
+function Stat({
+  value,
+  label,
+  color,
+  total,
+}: {
+  value: number
+  label: string
+  color?: string
+  total: number
+}) {
+  const n = useCountUp(value)
+  const ratio = total > 0 ? value / total : 0
+  return (
+    <div className="bg-[#0b1017] p-8">
+      <p
+        className="font-display text-[52px] font-700 leading-none tabular-nums"
+        style={{ color: color ?? "#fff" }}
+      >
+        {n}
+      </p>
+      <div
+        className="stat-bar"
+        style={{
+          ["--v" as string]: `${ratio}`,
+          ["--bar-color" as string]: color ?? "rgba(255,255,255,0.55)",
+        }}
+      >
+        <span className="stat-bar__fill" />
+      </div>
+      <p className="mt-3 font-mono text-[11px] tracking-[0.15em] text-white/45">{label.toUpperCase()}</p>
+    </div>
+  )
+}
+
 /* ------------------------------------------------------------------ */
 /* 12. FUTURE — horizontal timeline                                   */
 /* ------------------------------------------------------------------ */
 
+type RoadmapItem = { tag: string; t: string; d: string }
+
+function RoadmapCard({ item, i, className = "" }: { item: RoadmapItem; i: number; className?: string }) {
+  return (
+    <TiltCard className={`lift-card relative rounded-2xl border border-ink/10 bg-paper p-8 ${className}`}>
+      <div className="mb-6 flex items-center gap-3">
+        <span
+          className="flex h-9 w-9 items-center justify-center rounded-full font-mono text-[12px] text-white"
+          style={{ background: "var(--color-night)" }}
+        >
+          {i + 1}
+        </span>
+        <span className="font-mono text-[11px] tracking-[0.25em] text-ink/45">{item.tag}</span>
+      </div>
+      <h3 className="font-display text-[22px] font-600 leading-tight tracking-tight">{item.t}</h3>
+      <p className="mt-3 text-[14px] leading-relaxed text-ink/55">{item.d}</p>
+    </TiltCard>
+  )
+}
+
 function Future() {
-  const items = [
+  const items: RoadmapItem[] = [
     { tag: "TODAY", t: "Dust Detection", d: "Cameras flag panels that need attention." },
     { tag: "NEXT", t: "Automatic Cleaning", d: "Fully hands-off activation on threshold." },
     { tag: "FUTURE", t: "Panel Monitoring", d: "Continuous health & yield analytics." },
     { tag: "VISION", t: "Smarter Solar Maintenance", d: "Predictive, autonomous solar farms." },
   ]
-  return (
-    <section id="future" className="relative bg-mist py-28">
-      <div className="mx-auto max-w-[1240px] px-6">
-        <Reveal>
-          <Kicker n="07" label="ROADMAP" />
-          <h2 className="mt-6 font-display text-[clamp(2rem,4.6vw,3.2rem)] font-600 tracking-[-0.02em]">
-            Where this is going.
+  const { ref, progress } = useSectionProgress<HTMLElement>()
+  const trackRef = useRef<HTMLDivElement | null>(null)
+  const [overflow, setOverflow] = useState(0)
+
+  useEffect(() => {
+    const measure = () => {
+      const el = trackRef.current
+      if (!el) return
+      setOverflow(Math.max(0, el.scrollWidth - window.innerWidth + 72))
+    }
+    measure()
+    window.addEventListener("resize", measure)
+    return () => window.removeEventListener("resize", measure)
+  }, [])
+
+  // Advances only while the section is pinned, so the track moves at scroll speed.
+  const advance = Math.max(0, Math.min(1, (progress - 0.34) / 0.315))
+  const shift = advance * overflow
+
+  const heading = (
+    <div className="mx-auto max-w-[1240px] px-6">
+      <Reveal>
+        <Kicker n="07" label="ROADMAP" />          <h2 className="mt-6 font-display text-[clamp(2rem,4.6vw,3.2rem)] font-600 tracking-[-0.02em]">
+            <SplitText text="Where this is going." />
           </h2>
-        </Reveal>
+      </Reveal>
+    </div>
+  )
+
+  return (
+    <section id="future" ref={ref} className="relative bg-mist">
+
+      {/* Desktop: pinned timeline advanced by vertical scroll. */}
+      <div className="roadmap-pin hidden md:block">
+        <div className="roadmap-pin__sticky">
+          {heading}
+          <div className="roadmap-viewport mt-14">
+            <div
+              ref={trackRef}
+              className="roadmap-track"
+              style={{ transform: `translate3d(${-shift}px, 0, 0)` }}
+            >
+              {items.map((it, i) => (
+                <RoadmapCard key={it.tag} item={it} i={i} className="w-[440px] flex-none" />
+              ))}
+            </div>
+          </div>
+          <div className="mx-auto mt-10 flex w-full max-w-[1240px] items-center gap-4 px-6 font-mono text-[10px] tracking-[0.24em] text-ink/40">
+            <span className="h-px flex-1 bg-ink/15" />
+            <span>SCROLL TO ADVANCE</span>
+            <span className="h-px flex-1 bg-ink/15" />
+          </div>
+        </div>
       </div>
 
-      <Reveal className="mt-16">
-        <div className="flex gap-6 overflow-x-auto px-6 pb-6 [scrollbar-width:none] md:mx-auto md:max-w-[1240px]">
+      {/* Mobile: swipeable strip. */}
+      <div className="py-24 md:hidden">
+        {heading}
+        <div className="mt-12 flex gap-4 overflow-x-auto px-6 pb-4 [scrollbar-width:none]">
           {items.map((it, i) => (
-            <div
-              key={it.tag}
-              className="relative min-w-[280px] flex-1 rounded-2xl border border-ink/10 bg-paper p-8"
-            >
-              <div className="mb-6 flex items-center gap-3">
-                <span
-                  className="flex h-9 w-9 items-center justify-center rounded-full font-mono text-[12px] text-white"
-                  style={{ background: "var(--color-night)" }}
-                >
-                  {i + 1}
-                </span>
-                <span className="font-mono text-[11px] tracking-[0.25em] text-ink/45">{it.tag}</span>
-              </div>
-              <h3 className="font-display text-[22px] font-600 leading-tight tracking-tight">{it.t}</h3>
-              <p className="mt-3 text-[14px] leading-relaxed text-ink/55">{it.d}</p>
-              {i < items.length - 1 && (
-                <span className="absolute -right-3 top-1/2 hidden -translate-y-1/2 font-mono text-ink/25 md:block">→</span>
-              )}
-            </div>
+            <RoadmapCard key={it.tag} item={it} i={i} className="min-w-[280px] flex-1" />
           ))}
         </div>
-      </Reveal>
+      </div>
     </section>
   )
 }
@@ -1052,12 +1269,15 @@ function Final() {
   return (
     <section ref={ref} id="final" className="relative" style={{ background: "var(--color-night)" }}>
       <div className="mx-auto flex max-w-[1240px] flex-col items-center px-6 py-40 text-center text-white">
-        <div className="relative mb-14 w-[360px] max-w-[80vw]">
+        <div
+          className="final-panel relative mb-14 w-[360px] max-w-[80vw]"
+          style={{ transform: `translate3d(0, ${(1 - light) * 24}px, 0)` }}
+        >
           <div
             className="absolute -inset-10 rounded-full transition-opacity duration-500"
             style={{
               opacity: light,
-              background: "radial-gradient(circle, rgba(255,190,61,0.35), transparent 65%)",
+              background: "radial-gradient(circle, color-mix(in oklab, var(--color-solar) 38%, transparent), transparent 65%)",
             }}
           />
           <div className="relative" style={{ filter: `brightness(${0.5 + light * 0.7})` }}>
@@ -1067,28 +1287,32 @@ function Final() {
 
         <Reveal>
           <h2 className="font-display text-[clamp(2.2rem,5.5vw,4rem)] font-600 leading-[1.05] tracking-[-0.025em]">
-            Cleaner panels. Smarter maintenance.
+            <SplitText text="Cleaner panels. Smarter maintenance." />
           </h2>
           <p className="mt-6 font-mono text-[13px] tracking-[0.25em] text-white/50">
             DETECT → CLEAN → MONITOR
           </p>
         </Reveal>
 
-        <Reveal delay={120}>
+        <Reveal delay={120} from="right">
           <div className="mt-12 flex flex-col items-center gap-4 sm:flex-row">
-            <a
-              href="#hero"
-              className="rounded-full px-8 py-4 font-mono text-[12px] tracking-[0.14em] text-night transition-transform hover:scale-[1.03]"
-              style={{ background: "linear-gradient(90deg, #ffce5c, #ffb020)" }}
-            >
-              EXPLORE THE PROTOTYPE
-            </a>
-            <Link
-              to="/contact"
-              className="rounded-full border border-white/20 px-8 py-4 font-mono text-[12px] tracking-[0.14em] text-white/80 transition-colors hover:bg-white/5"
-            >
-              CONTACT OUR TEAM
-            </Link>
+            <Magnetic>
+              <a
+                href="#hero"
+                className="btn-sheen rounded-full px-8 py-4 font-mono text-[12px] tracking-[0.14em] text-night transition-transform hover:scale-[1.03]"
+                style={{ background: "linear-gradient(90deg, var(--color-solar), var(--color-solar-deep))" }}
+              >
+                EXPLORE THE PROTOTYPE
+              </a>
+            </Magnetic>
+            <Magnetic>
+              <Link
+                to="/contact"
+                className="btn-sheen rounded-full border border-white/20 px-8 py-4 font-mono text-[12px] tracking-[0.14em] text-white/80 transition-colors hover:bg-white/5"
+              >
+                CONTACT OUR TEAM
+              </Link>
+            </Magnetic>
           </div>
         </Reveal>
       </div>
@@ -1106,6 +1330,7 @@ export default function Home() {
   return (
     <SystemProvider>
       <VisitorTracker />
+      <ScrollProgress />
       <div className="relative">
         <Nav />
         <Hero />
@@ -1113,10 +1338,11 @@ export default function Home() {
         <Seam from="var(--color-paper)" to="var(--color-night)" />
         <Question />
         <Reveal4 />
+        <SpecTicker />
         <HowItWorks />
-        <Seam from="var(--color-mist)" to="#0b2033" />
+        <Seam from="var(--color-mist)" to="#0a1a26" />
         <WaterTransition />
-        <Seam from="#0b2033" to="var(--color-night)" h={80} />
+        <Seam from="#0a1a26" to="var(--color-night)" h={80} />
         <AppControl />
         <Seam from="var(--color-night)" to="var(--color-paper)" />
         <Technology />

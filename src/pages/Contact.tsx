@@ -2,6 +2,8 @@ import { useEffect, useState } from "react"
 import { Link } from "react-router"
 import { LocationPicker } from "../components/LocationPicker"
 import { submitContactRequest, type ContactLocation, type ContactRequest } from "../lib/contactApi"
+import { ScrollProgress } from "../lib/motion"
+import { useHeaderFormation } from "../lib/scroll"
 import { ThemeToggle } from "../lib/theme"
 
 /* ------------------------------------------------------------------ */
@@ -9,26 +11,26 @@ import { ThemeToggle } from "../lib/theme"
 /* ------------------------------------------------------------------ */
 
 function ContactNav() {
+  const headerRef = useHeaderFormation<HTMLElement>()
+
   return (
-    <header
-      className="fixed inset-x-0 top-0 z-50 backdrop-blur-xl"
-      style={{
-        background: "color-mix(in oklab, var(--color-paper) 72%, transparent)",
-        borderBottom: "1px solid color-mix(in oklab, var(--color-ink) 10%, transparent)",
-      }}
-    >
-      <div className="mx-auto flex max-w-[1240px] items-center justify-between px-6 py-4">
-        <Link to="/" className="flex items-center gap-2.5">
-          <div className="relative h-6 w-6">
-            <div className="sun-core absolute inset-0 rounded-full" style={{ background: "radial-gradient(circle, #ffce5c, #f38b1c)" }} />
-          </div>
+    <header ref={headerRef} className="site-header nav-enter">
+      <div className="site-header__inner">
+        <Link to="/" className="site-brand">
+          <span className="relative h-6 w-6">
+            <span
+              className="sun-core absolute inset-0 rounded-full"
+              style={{ background: "radial-gradient(circle at 38% 32%, #ffd98c, #e58a2b 62%, #c96f18)" }}
+            />
+          </span>
           <span className="font-display text-[15px] font-600 tracking-tight text-ink">SOLARA</span>
         </Link>
-        <div className="flex items-center gap-3">
+        <div className="ml-auto flex items-center gap-2">
           <ThemeToggle />
           <Link
             to="/"
-            className="rounded-full border border-ink/15 px-4 py-2 font-mono text-[11px] tracking-[0.12em] text-ink/80 transition-colors hover:bg-ink/5"
+            className="btn-sheen header-cta inline-flex items-center gap-2"
+            style={{ background: "var(--color-night)", color: "#ffffff" }}
           >
             ← BACK HOME
           </Link>
@@ -144,11 +146,12 @@ export default function Contact() {
   return (
     <div className="relative min-h-screen" style={{ background: "var(--color-paper)" }}>
       <ContactNav />
+      <ScrollProgress />
 
       {/* ambient glow */}
       <div
         className="pointer-events-none absolute inset-x-0 top-0 h-[420px]"
-        style={{ background: "radial-gradient(60% 100% at 50% 0%, rgba(255,176,32,0.14), transparent 70%)" }}
+        style={{ background: "radial-gradient(60% 100% at 50% 0%, color-mix(in oklab, var(--color-solar) 14%, transparent), transparent 70%)" }}
       />
 
       <main className="relative mx-auto max-w-[1080px] px-6 pb-24 pt-32">
@@ -160,14 +163,22 @@ export default function Contact() {
         ) : (
           <div className="page-enter">
             {/* hero */}
-            <div className="flex items-center gap-3 font-mono text-[11px] tracking-[0.28em] text-ink/45">
+            <div
+              className="hero-intro flex items-center gap-3 font-mono text-[11px] tracking-[0.28em] text-ink/45"
+              style={{ ["--intro-delay" as string]: "80ms" }}
+            >
               <span className="h-px w-8 bg-ink/45" />
               <span>GET IN TOUCH</span>
             </div>
             <h1 className="mt-6 max-w-[720px] font-display text-[clamp(2.2rem,5.5vw,4rem)] font-600 leading-[1.03] tracking-[-0.025em] text-ink">
-              Let&apos;s build cleaner solar.
+              <span className="line-mask">
+                <span style={{ ["--intro-delay" as string]: "170ms" }}>Let&apos;s build cleaner solar.</span>
+              </span>
             </h1>
-            <p className="mt-5 max-w-[520px] text-[17px] leading-relaxed text-ink/60">
+            <p
+              className="hero-intro mt-5 max-w-[520px] text-[17px] leading-relaxed text-ink/60"
+              style={{ ["--intro-delay" as string]: "320ms" }}
+            >
               Tell us about your solar installation and our team will get in touch.
             </p>
 
@@ -205,8 +216,8 @@ export default function Contact() {
                 <button
                   type="submit"
                   disabled={status === "submitting"}
-                  className="group relative inline-flex items-center justify-center gap-3 overflow-hidden rounded-full px-10 py-4 font-mono text-[12px] tracking-[0.16em] text-night transition-transform hover:scale-[1.02] active:scale-95 disabled:cursor-not-allowed"
-                  style={{ background: "linear-gradient(90deg, #ffce5c, #ffb020)" }}
+                  className="btn-sheen group relative inline-flex items-center justify-center gap-3 overflow-hidden rounded-full px-10 py-4 font-mono text-[12px] tracking-[0.16em] text-night transition-transform hover:scale-[1.02] active:scale-95 disabled:cursor-not-allowed"
+                  style={{ background: "linear-gradient(90deg, var(--color-solar), var(--color-solar-deep))" }}
                 >
                   {status === "submitting" ? (
                     <>
@@ -237,7 +248,7 @@ function SuccessState({ onReset }: { onReset: () => void }) {
       <div className="relative mb-8">
         <span className="pulse-ring absolute inset-0 rounded-full" style={{ background: "rgba(52,211,153,0.25)" }} />
         <span
-          className="relative flex h-16 w-16 items-center justify-center rounded-full text-[26px] text-night"
+          className="pop-in relative flex h-16 w-16 items-center justify-center rounded-full text-[26px] text-night"
           style={{ background: "linear-gradient(90deg, #6ee7b7, #34d399)" }}
         >
           ✓
@@ -250,14 +261,14 @@ function SuccessState({ onReset }: { onReset: () => void }) {
       <div className="mt-10 flex flex-col items-center gap-4 sm:flex-row">
         <Link
           to="/"
-          className="rounded-full px-8 py-4 font-mono text-[12px] tracking-[0.14em] text-night transition-transform hover:scale-[1.03]"
-          style={{ background: "linear-gradient(90deg, #ffce5c, #ffb020)" }}
+          className="btn-sheen rounded-full px-8 py-4 font-mono text-[12px] tracking-[0.14em] text-night transition-transform hover:scale-[1.03]"
+          style={{ background: "linear-gradient(90deg, var(--color-solar), var(--color-solar-deep))" }}
         >
           BACK TO HOME
         </Link>
         <button
           onClick={onReset}
-          className="rounded-full border border-ink/20 px-8 py-4 font-mono text-[12px] tracking-[0.14em] text-ink/80 transition-colors hover:bg-ink/5"
+          className="btn-sheen rounded-full border border-ink/20 px-8 py-4 font-mono text-[12px] tracking-[0.14em] text-ink/80 transition-colors hover:bg-ink/5"
         >
           SEND ANOTHER REQUEST
         </button>

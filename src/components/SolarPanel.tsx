@@ -2,7 +2,7 @@ type PanelState = "clean" | "dust" | "cleaning"
 
 const STATE_META: Record<PanelState, { label: string; color: string; ring: string }> = {
   clean: { label: "Clean", color: "var(--color-leaf)", ring: "#34d399" },
-  dust: { label: "Dust Detected", color: "var(--color-solar)", ring: "#ffb020" },
+  dust: { label: "Dust Detected", color: "var(--color-solar)", ring: "#e58a2b" },
   cleaning: { label: "Cleaning", color: "var(--color-sensor)", ring: "#22d3ee" },
 }
 

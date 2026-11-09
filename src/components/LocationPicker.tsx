@@ -25,7 +25,7 @@ const pinIcon = L.divIcon({
       <circle cx="15" cy="15" r="5.5" fill="#0a0e14"/>
       <defs>
         <linearGradient id="g" x1="0" y1="0" x2="0" y2="40" gradientUnits="userSpaceOnUse">
-          <stop stop-color="#ffce5c"/><stop offset="1" stop-color="#ffb020"/>
+          <stop stop-color="#f5c26b"/><stop offset="1" stop-color="#e58a2b"/>
         </linearGradient>
       </defs>
     </svg>`,
@@ -198,7 +198,7 @@ export function LocationPicker({
             onClick={() => void runSearch()}
             disabled={searching}
             className="absolute right-1.5 top-1.5 rounded-lg px-4 py-2 font-mono text-[11px] tracking-[0.12em] text-night transition-transform hover:scale-[1.03] active:scale-95 disabled:opacity-60"
-            style={{ background: "linear-gradient(90deg, #ffce5c, #ffb020)" }}
+            style={{ background: "linear-gradient(90deg, var(--color-solar), var(--color-solar-deep))" }}
           >
             {searching ? "…" : "FIND"}
           </button>

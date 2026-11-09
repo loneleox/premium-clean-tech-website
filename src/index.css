@@ -4,50 +4,70 @@
 @import 'tailwindcss';
 
 @theme {
+  /* Clean-tech type: geometric display, neutral body, technical labels. */
   --font-display: 'Sora', system-ui, sans-serif;
   --font-body: 'Inter', system-ui, sans-serif;
   --font-mono: 'JetBrains Mono', ui-monospace, monospace;
 
-  --color-ink: #0a0e14;
-  --color-ink-soft: #10151d;
-  --color-paper: #e9e6de;
-  --color-mist: #ddd8cd;
-  --color-card: #f4f1ea;
+  /* Neutral daylight surfaces with a single solar amber accent. */
+  --color-ink: #0b1116;
+  --color-ink-soft: #18222b;
+  --color-paper: #f5f6f3;
+  --color-mist: #eaede6;
+  --color-card: #fbfcf9;
 
   /* Always-dark surfaces for the art-directed story sections. */
-  --color-night: #0a0e14;
-  --color-night-soft: #10151d;
+  --color-night: #0a0f14;
+  --color-night-soft: #111820;
 
-  --color-solar: #ffb020;
-  --color-solar-deep: #f38b1c;
-  --color-sky: #38bdf8;
-  --color-sensor: #22d3ee;
-  --color-leaf: #34d399;
-  --color-dust: #b9a888;
+  --color-solar: #e58a2b;
+  --color-solar-deep: #c96f18;
+  --color-sky: #2f7fa6;
+  --color-sensor: #2f8fa8;
+  --color-leaf: #2f7d5b;
+  --color-dust: #b3a68f;
 }
 
 :root {
   --background: var(--color-paper);
   --foreground: var(--color-ink);
+
+  /* Motion tokens — one easing family keeps every transition feeling related. */
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-out-soft: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in-out-soft: cubic-bezier(0.65, 0, 0.35, 1);
+
+  /* Header pill: light surfaces need a whiter, more present glass than the
+     near-transparent version that works over the dark hero. */
+  --header-pill-tint: #ffffff;
+  --header-pill-alpha: 16%;
+  --header-pill-border: #0b1116;
+  --header-pill-border-alpha: 18%;
 }
 
 /* Dark theme: flip neutral surfaces + text. Story sections use --color-night
    tokens so they stay dark in both themes. text-ink is only used on light
    surfaces (dark sections use text-white), so flipping ink→light is safe. */
 html.dark {
-  --color-ink: #eaf0f6;
-  --color-ink-soft: #c7d0da;
-  --color-paper: #0b0f16;
-  --color-mist: #10161f;
-  --color-card: #161d28;
+  --color-ink: #e8eef3;
+  --color-ink-soft: #c2ced8;
+  --color-paper: #0a0f14;
+  --color-mist: #101820;
+  --color-card: #161f27;
+
+  --header-pill-tint: var(--color-paper);
+  --header-pill-alpha: 16%;
+  --header-pill-border: #ffffff;
+  --header-pill-border-alpha: 30%;
 }
 
 * {
-  border-color: color-mix(in oklab, var(--color-ink) 10%, transparent);
+  border-color: color-mix(in oklab, var(--color-ink) 12%, transparent);
 }
 
 html {
   scroll-behavior: smooth;
+  scroll-padding-top: 104px;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
@@ -75,22 +95,179 @@ body {
   background: transparent;
 }
 
-.font-display { font-family: var(--font-display); }
+.font-display {
+  font-family: var(--font-display);
+  letter-spacing: -0.01em;
+}
 .font-mono { font-family: var(--font-mono); }
+
+/* Fine engineering grid, faded out toward the edges, behind the hero. */
+.tech-grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(to right, color-mix(in oklab, var(--color-ink) 7%, transparent) 1px, transparent 1px),
+    linear-gradient(to bottom, color-mix(in oklab, var(--color-ink) 7%, transparent) 1px, transparent 1px);
+  background-size: 72px 72px;
+  -webkit-mask-image: radial-gradient(ellipse 70% 60% at 50% 38%, #000 32%, transparent 80%);
+  mask-image: radial-gradient(ellipse 70% 60% at 50% 38%, #000 32%, transparent 80%);
+  opacity: 0.85;
+}
 
 /* ---- Reveal system ---- */
 .reveal {
   opacity: 0;
-  transform: translateY(20px);
-  transition: opacity 450ms cubic-bezier(0.16, 1, 0.3, 1),
-    transform 450ms cubic-bezier(0.16, 1, 0.3, 1);
-  transition-delay: 0ms;
+  transform: translate3d(0, 26px, 0);
+  filter: blur(5px);
+  transition:
+    opacity 720ms var(--ease-out-expo),
+    transform 720ms var(--ease-out-expo),
+    filter 720ms var(--ease-out-expo);
+  transition-delay: var(--reveal-delay, 0ms);
+}
+
+.reveal--left {
+  transform: translate3d(-56px, 12px, 0) rotate(-0.6deg);
+}
+
+.reveal--right {
+  transform: translate3d(56px, 12px, 0) rotate(0.6deg);
+}
+
+/* Sideways boxes travel further, so they get a longer, more even glide. */
+.reveal--left,
+.reveal--right {
+  transition-duration: 1100ms;
+  transition-timing-function: var(--ease-in-out-soft);
 }
 
 .reveal.in {
   opacity: 1;
   transform: none;
+  filter: none;
 }
+
+/* ---- Choreographed entrances ---- */
+@keyframes introRise {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 20px, 0);
+  }
+  to {
+    opacity: var(--intro-opacity, 1);
+    transform: none;
+  }
+}
+
+.hero-intro {
+  animation: introRise 900ms var(--ease-out-expo) both;
+  animation-delay: var(--intro-delay, 0ms);
+}
+
+/* Masked line rise for headlines — the copy slides up behind a hard edge. */
+.line-mask {
+  display: block;
+  overflow: hidden;
+  padding-bottom: 0.12em;
+  margin-bottom: -0.12em;
+}
+
+.line-mask > span {
+  display: block;
+  transform: translate3d(0, 112%, 0);
+  animation: lineRise 1100ms var(--ease-out-expo) both;
+  animation-delay: var(--intro-delay, 0ms);
+}
+
+@keyframes lineRise {
+  to { transform: none; }
+}
+
+@keyframes navDrop {
+  from {
+    opacity: 0;
+    transform: translateY(-100%);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* No fill mode: a retained transform on the header would make it a backdrop
+   root and stop the pill's backdrop-filter from sampling the page. */
+.nav-enter { animation: navDrop 800ms var(--ease-out-expo); }
+
+
+/* Light sweep across primary actions on hover. */
+.btn-sheen {
+  position: relative;
+  overflow: hidden;
+  border-radius: 999px;
+  box-shadow: 0 12px 26px -20px rgba(11, 17, 22, 0.6);
+  transition:
+    box-shadow 420ms var(--ease-out-expo),
+    transform 420ms var(--ease-out-expo),
+    border-color 420ms var(--ease-out-expo);
+}
+.btn-sheen::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    105deg,
+    transparent 32%,
+    rgba(255, 255, 255, 0.5) 48%,
+    transparent 64%
+  );
+  transform: translateX(-140%);
+  transition: transform 900ms var(--ease-out-expo);
+  pointer-events: none;
+}
+.btn-sheen:hover::after { transform: translateX(140%); }
+.btn-sheen:hover {
+  box-shadow: 0 18px 32px -18px rgba(201, 111, 24, 0.55);
+  transform: translateY(-1px);
+}
+.btn-sheen:active {
+  box-shadow: 0 8px 20px -18px rgba(201, 111, 24, 0.55);
+  transform: translateY(0);
+}
+
+.lift-card {
+  transition:
+    transform 520ms var(--ease-out-expo),
+    box-shadow 520ms var(--ease-out-expo),
+    border-color 520ms var(--ease-out-expo),
+    background-color 520ms var(--ease-out-expo);
+}
+.lift-card:hover {
+  transform: translateY(-4px);
+  border-color: color-mix(in oklab, var(--color-solar) 40%, transparent);
+  box-shadow: 0 24px 48px -32px rgba(11, 17, 22, 0.35);
+}
+
+/* ---- Reading progress ---- */
+.scroll-progress {
+  position: fixed;
+  inset: 0 0 auto 0;
+  height: 2px;
+  z-index: 60;
+  transform-origin: 0 50%;
+  transform: scaleX(0);
+  opacity: 0;
+  transition: opacity 350ms ease;
+  background: linear-gradient(90deg, var(--color-solar-deep), var(--color-solar));
+  box-shadow: 0 0 14px rgba(255, 176, 32, 0.55);
+  pointer-events: none;
+}
+
+@keyframes popIn {
+  0% { opacity: 0; transform: scale(0.82); }
+  60% { transform: scale(1.03); }
+  100% { opacity: 1; transform: none; }
+}
+.pop-in { animation: popIn 620ms var(--ease-out-expo) both; }
 
 /* ---- Keyframes ---- */
 @keyframes floatDust {
@@ -174,7 +351,7 @@ body {
   to { opacity: 1; transform: none; }
 }
 .page-enter {
-  animation: pageEnter 800ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: pageEnter 800ms var(--ease-out-expo) both;
 }
 
 /* ---- Leaflet on-brand overrides ---- */
@@ -187,7 +364,7 @@ body {
   height: 10px;
   transform: translateX(-50%);
   border-radius: 50%;
-  background: radial-gradient(circle, rgba(255,176,32,0.45), transparent 70%);
+  background: radial-gradient(circle, color-mix(in oklab, var(--color-solar) 45%, transparent), transparent 70%);
 }
 .leaflet-container {
   background: var(--color-mist);
@@ -207,3 +384,502 @@ body {
 .leaflet-control-attribution a { color: color-mix(in oklab, var(--color-ink) 60%, transparent) !important; }
 
 html.dark .leaflet-container { background: #05090f; }
+
+/* ------------------------------------------------------------------ */
+/* Floating glass header                                               */
+/* ------------------------------------------------------------------ */
+
+.site-header {
+  position: fixed;
+  inset: 0 0 auto 0;
+  z-index: 50;
+  padding: 14px 20px 0;
+  pointer-events: none;
+}
+
+/* At the top this is a normal, flat, full-width bar: no shape, no glass.
+   As --hp rises it contracts to the content width, its corners round off and
+   the glass surface, border and shadow arrive together, so it settles into a
+   floating pill purely through scroll. */
+.site-header__inner {
+  pointer-events: auto;
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  max-width: calc(100% * (1 - var(--hp, 0)) + 1240px * var(--hp, 0));
+  margin: 0 auto;
+  padding: 8px 8px 8px 16px;
+  border: 1px solid
+    color-mix(
+      in oklab,
+      var(--header-pill-border) calc(var(--header-pill-border-alpha) * var(--hp, 0)),
+      transparent
+    );
+  border-radius: calc(30px * var(--hp, 0));
+  background: color-mix(
+    in oklab,
+    var(--header-pill-tint) calc(var(--header-pill-alpha) * var(--hp, 0)),
+    transparent
+  );
+  -webkit-backdrop-filter: blur(calc(20px * var(--hp, 0))) saturate(calc(1 + 0.5 * var(--hp, 0)));
+  backdrop-filter: blur(calc(20px * var(--hp, 0))) saturate(calc(1 + 0.5 * var(--hp, 0)));
+  box-shadow:
+    0 calc(24px * var(--hp, 0)) calc(50px * var(--hp, 0)) calc(-32px * var(--hp, 0))
+      rgba(9, 24, 38, calc(0.5 * var(--hp, 0))),
+    inset 0 1px 0 rgba(255, 255, 255, calc(0.7 * var(--hp, 0)));
+}
+
+.site-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-radius: 999px;
+}
+
+.site-nav {
+  gap: 2px;
+  margin-left: auto;
+}
+
+.site-nav__link {
+  position: relative;
+  border-radius: 999px;
+  padding: 9px 13px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  color: color-mix(in oklab, var(--color-ink) 55%, transparent);
+  transition:
+    color 300ms var(--ease-out-soft),
+    background-color 300ms var(--ease-out-soft);
+}
+
+.site-nav__link:hover {
+  color: var(--color-ink);
+  background: color-mix(in oklab, var(--color-ink) 5%, transparent);
+}
+
+.site-nav__link.is-active {
+  color: var(--color-ink);
+  background: color-mix(in oklab, var(--color-solar) 16%, transparent);
+}
+
+.site-nav__link.is-active::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: 5px;
+  width: 3px;
+  height: 3px;
+  border-radius: 999px;
+  background: var(--color-solar);
+  transform: translateX(-50%);
+}
+
+.header-cta {
+  padding: 9px 15px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+}
+
+.menu-btn {
+  position: relative;
+  height: 38px;
+  width: 38px;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid color-mix(in oklab, var(--color-ink) 14%, transparent);
+  border-radius: 999px;
+}
+
+.menu-btn span {
+  position: absolute;
+  height: 1.5px;
+  width: 15px;
+  background: var(--color-ink);
+  transition:
+    transform 360ms var(--ease-out-expo),
+    opacity 240ms var(--ease-out-soft);
+}
+
+.menu-btn span:nth-child(1) { transform: translateY(-3.5px); }
+.menu-btn span:nth-child(2) { transform: translateY(3.5px); }
+.menu-btn.is-open span:nth-child(1) { transform: rotate(45deg); }
+.menu-btn.is-open span:nth-child(2) { transform: rotate(-45deg); }
+
+.mobile-menu {
+  background:
+    linear-gradient(160deg, color-mix(in oklab, var(--color-paper) 84%, transparent), color-mix(in oklab, var(--color-paper) 74%, transparent));
+  -webkit-backdrop-filter: blur(30px) saturate(180%);
+  backdrop-filter: blur(30px) saturate(180%);
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-10px);
+  transition:
+    opacity 320ms var(--ease-out-soft),
+    transform 480ms var(--ease-out-expo),
+    visibility 0s 480ms;
+}
+
+.mobile-menu.is-open {
+  opacity: 1;
+  visibility: visible;
+  transform: none;
+  transition-delay: 0s;
+}
+
+.mobile-menu__link {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 2px;
+  border-bottom: 1px solid color-mix(in oklab, var(--color-ink) 10%, transparent);
+  font-family: var(--font-display);
+  font-size: clamp(1.7rem, 7.4vw, 2.4rem);
+  letter-spacing: -0.02em;
+  color: var(--color-ink);
+  opacity: 0;
+  transform: translateY(14px);
+  transition:
+    opacity 520ms var(--ease-out-expo),
+    transform 520ms var(--ease-out-expo);
+}
+
+.mobile-menu.is-open .mobile-menu__link {
+  opacity: 1;
+  transform: none;
+  transition-delay: calc(var(--i, 0) * 55ms + 90ms);
+}
+
+.mobile-menu__index {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.2em;
+  color: color-mix(in oklab, var(--color-ink) 40%, transparent);
+}
+
+.mobile-menu__foot {
+  margin-top: 28px;
+  opacity: 0;
+  transition: opacity 400ms 360ms;
+}
+.mobile-menu.is-open .mobile-menu__foot { opacity: 1; }
+
+/* ------------------------------------------------------------------ */
+/* Scroll-linked motion                                                */
+/* ------------------------------------------------------------------ */
+
+.scroll-rail {
+  position: absolute;
+  left: 0;
+  top: 4px;
+  bottom: 4px;
+  width: 1px;
+  background: color-mix(in oklab, var(--color-ink) 12%, transparent);
+}
+
+.scroll-rail__fill {
+  position: absolute;
+  inset: 0 0 auto 0;
+  width: 1px;
+  height: calc(var(--p, 0) * 100%);
+  background: linear-gradient(180deg, var(--color-solar), var(--color-solar-deep));
+}
+
+.scroll-rail__dot {
+  position: absolute;
+  left: 50%;
+  top: calc(var(--p, 0) * 100%);
+  height: 7px;
+  width: 7px;
+  transform: translate(-50%, -50%);
+  border-radius: 999px;
+  background: var(--color-solar);
+  box-shadow: 0 0 0 4px color-mix(in oklab, var(--color-solar) 18%, transparent);
+}
+
+/* Subtle 3D attitude tied to the section's scroll progress. */
+.tech-deck {
+  transform:
+    perspective(1500px)
+    rotateX(calc((0.5 - var(--p, 0.5)) * 9deg))
+    translateY(calc((0.5 - var(--p, 0.5)) * 26px));
+  transform-origin: 50% 0;
+}
+
+@media (max-width: 767px) {
+  .tech-deck { transform: none; }
+}
+
+/* Pinned horizontal roadmap: vertical scroll advances the track. */
+.roadmap-pin { height: 190vh; }
+
+.roadmap-pin__sticky {
+  position: sticky;
+  top: 0;
+  display: flex;
+  height: 100vh;
+  flex-direction: column;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.roadmap-viewport { overflow: hidden; }
+
+.roadmap-track {
+  display: flex;
+  width: max-content;
+  gap: 24px;
+  padding: 0 24px;
+  will-change: transform;
+}
+
+.stat-bar {
+  position: relative;
+  margin-top: 18px;
+  height: 2px;
+  width: 100%;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.stat-bar__fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: calc(var(--v, 0) * 100%);
+  background: var(--bar-color, var(--color-solar));
+  transition: width 900ms var(--ease-out-expo);
+}
+
+/* ------------------------------------------------------------------ */
+/* Motion variety                                                      */
+/* ------------------------------------------------------------------ */
+
+/* Pointer tilt + specular glare. */
+.tilt {
+  position: relative;
+  transform: perspective(1200px) rotateX(var(--tx, 0deg)) rotateY(var(--ty, 0deg));
+  transform-style: preserve-3d;
+  transition:
+    transform 180ms var(--ease-out-soft),
+    box-shadow 520ms var(--ease-out-expo),
+    border-color 520ms var(--ease-out-expo);
+}
+
+.tilt:hover {
+  transform:
+    perspective(1200px)
+    rotateX(var(--tx, 0deg))
+    rotateY(var(--ty, 0deg))
+    translateY(-4px);
+}
+
+.tilt::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: radial-gradient(
+    220px circle at var(--gx, 50%) var(--gy, 50%),
+    rgba(255, 255, 255, 0.18),
+    transparent 62%
+  );
+  opacity: 0;
+  transition: opacity 300ms var(--ease-out-soft);
+  pointer-events: none;
+}
+
+.tilt:hover::after { opacity: 1; }
+
+.magnetic {
+  display: inline-flex;
+  transition: transform 260ms var(--ease-out-soft);
+  will-change: transform;
+}
+
+/* Capability ticker */
+.ticker {
+  position: relative;
+  overflow: hidden;
+  border-block: 1px solid color-mix(in oklab, var(--color-ink) 14%, transparent);
+  /* Fixed palette: this band stays dark in both themes, so it must not
+     inherit the theme-flipped paper colour as its text colour. */
+  background: var(--color-night);
+  color: #f5f6f3;
+  padding: 15px 0;
+}
+
+.ticker__track {
+  display: flex;
+  width: max-content;
+  animation: tickerMove 42s linear infinite;
+}
+
+.ticker:hover .ticker__track { animation-play-state: paused; }
+
+.ticker__item {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+  padding-inline: 22px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.24em;
+  white-space: nowrap;
+}
+
+.ticker__dot {
+  width: 5px;
+  height: 5px;
+  flex: none;
+  border-radius: 999px;
+  background: var(--color-solar);
+}
+
+@keyframes tickerMove {
+  from { transform: translate3d(0, 0, 0); }
+  to { transform: translate3d(-50%, 0, 0); }
+}
+
+/* Before / after cleaning scrubber */
+.clean-slider { position: relative; }
+
+.clean-slider__input {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: ew-resize;
+  touch-action: pan-y;
+}
+
+.clean-slider__line {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: #fff;
+  box-shadow: 0 0 16px rgba(120, 200, 255, 0.9);
+}
+
+.clean-slider__grip {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  display: grid;
+  place-items: center;
+  height: 34px;
+  width: 34px;
+  border: 1px solid rgba(11, 17, 22, 0.12);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.92);
+  color: #0b1116;
+  font-size: 13px;
+  transform: translate(-50%, -50%);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+}
+
+.clean-slider:has(.clean-slider__input:focus-visible) .clean-slider__grip {
+  outline: 2px solid var(--color-solar);
+  outline-offset: 2px;
+}
+
+/* Word-by-word heading reveal */
+.split {
+  display: inline-block;
+  max-width: 100%;
+}
+
+.split__word {
+  display: inline-block;
+  overflow: hidden;
+  vertical-align: bottom;
+  padding-bottom: 0.14em;
+  margin-bottom: -0.14em;
+  margin-right: 0.26em;
+}
+
+.split__word:last-child { margin-right: 0; }
+
+.split__inner {
+  display: inline-block;
+  opacity: 0;
+  transform: translate3d(0, 110%, 0);
+  transition:
+    transform 850ms var(--ease-out-expo),
+    opacity 620ms var(--ease-out-expo);
+  transition-delay: calc(var(--i, 0) * 55ms + var(--d, 0ms));
+}
+
+.split.in .split__inner {
+  opacity: 1;
+  transform: none;
+}
+
+/* ---- Reduced motion: honour the OS preference everywhere ---- */
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-delay: 0ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    transition-delay: 0ms !important;
+  }
+
+  .reveal,
+  .hero-intro,
+  .line-mask > span,
+  .nav-enter,
+  .page-enter,
+  .pop-in {
+    opacity: var(--intro-opacity, 1) !important;
+    transform: none !important;
+    filter: none !important;
+  }
+
+  /* Decorative particle field is hidden rather than frozen mid-fall. */
+  .dust-particle { display: none; }
+  .scroll-progress { display: none; }
+
+  /* Scroll-linked depth and the pinned roadmap collapse to static layouts. */
+  .tech-deck,
+  .tech-grid,
+  .hero-copy,
+  .hero-panel,
+  .final-panel { transform: none !important; }
+  .roadmap-pin { height: auto !important; }
+  .roadmap-pin__sticky {
+    position: static;
+    height: auto;
+    padding: 96px 0;
+  }
+  .roadmap-viewport { overflow-x: auto; overflow-y: hidden; }
+  .roadmap-track { transform: none !important; }
+  .mobile-menu__link,
+  .mobile-menu__foot { opacity: 1 !important; transform: none !important; }
+
+  .tilt,
+  .tilt:hover { transform: none !important; }
+  .tilt::after { display: none; }
+  .magnetic { transform: none !important; }
+  .ticker__track {
+    animation: none;
+    width: auto;
+    flex-wrap: wrap;
+  }
+  .split__inner {
+    opacity: 1 !important;
+    transform: none !important;
+    transition: none !important;
+  }
+}
